@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { HostInput, type Host, type HostDraft } from '@supilot/contracts'
 import { Button } from '@supilot/ui'
-import { FolderOpen, KeyRound, Save, Server, ShieldCheck } from 'lucide-react'
+import { AlertCircle, FolderOpen, KeyRound, Save, Server, ShieldCheck } from 'lucide-react'
+import { endpoint } from '../../app/format'
 
 export const draftOf = (host: Host): HostDraft => {
   const { updatedAt, ...draft } = host
@@ -11,12 +12,14 @@ export function HostForm({
   host,
   demo,
   onSave,
-  onCancel
+  onCancel,
+  onDirtyChange
 }: {
   host?: Host
   demo: boolean
   onSave: (draft: HostDraft) => Promise<void>
   onCancel: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [form, setForm] = useState<HostDraft>(
     host
@@ -37,24 +40,65 @@ export function HostForm({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tagsText, setTagsText] = useState(host?.tags.join(', ') || '')
   const [busy, setBusy] = useState(false)
-  const update = <K extends keyof HostDraft>(key: K, value: HostDraft[K]) =>
+  const prefix = useId()
+  const summary = useRef<HTMLDivElement>(null)
+  const baseline = useRef(JSON.stringify({ form, tagsText }))
+  const dirty = baseline.current !== JSON.stringify({ form, tagsText })
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty])
+  const fieldProps = (key: keyof HostDraft) => ({
+    id: `${prefix}-${key}`,
+    'aria-invalid': !!errors[key],
+    'aria-describedby': `${prefix}-${key}-help`
+  })
+  const errorLabels: Record<string, string> = {
+    name: '主机名称',
+    address: '主机地址',
+    port: '公网连接端口',
+    sshdPort: '远端监听端口',
+    username: '用户名',
+    group: '分组',
+    keyPath: '私钥文件路径',
+    tags: '标签',
+    notes: '备注',
+    form: '保存失败'
+  }
+  const update = <K extends keyof HostDraft>(key: K, value: HostDraft[K]) => {
     setForm((v) => ({ ...v, [key]: value }))
+    setErrors((v) => {
+      const next = { ...v }
+      delete next[key]
+      return next
+    })
+  }
   const field = (key: keyof HostDraft, label: string, input: React.ReactNode, help?: string) => (
-    <label className="field">
-      <span>{label}</span>
+    <div className="field" data-invalid={!!errors[key]}>
+      <div className="field-label">
+        <label htmlFor={`${prefix}-${key}`}>{label}</label>
+        {['name', 'address', 'username', 'port'].includes(key) && (
+          <span className="required-mark" aria-hidden="true">
+            {' '}
+            *
+          </span>
+        )}
+      </div>
       {input}
-      {errors[key] ? <small className="error">{errors[key]}</small> : help && <small>{help}</small>}
-    </label>
+      <small id={`${prefix}-${key}-help`} className={errors[key] ? 'error' : undefined}>
+        {errors[key] || help}
+      </small>
+    </div>
   )
   return (
-    <div className="page-scroll">
+    <div className="page-scroll host-form-scroll">
       <div className="content-page form-page">
         <div className="eyebrow">
           <Server size={14} /> 主机档案 / {host ? '编辑' : '新建'}
         </div>
-        <h1>{host ? `编辑 ${host.name}` : '添加你的第一条连接'}</h1>
-        <p className="page-lead">保存连接档案，随时打开终端。无需安装远端 Agent 或 SuRelay。</p>
+        <h1>{host ? `编辑 ${host.name}` : '添加主机'}</h1>
+        <p className="page-lead">填写连接信息，保存后即可从主机列表打开终端。</p>
         <form
+          noValidate
           onSubmit={async (e) => {
             e.preventDefault()
             const parsed = HostInput.safeParse({
@@ -74,6 +118,7 @@ export function HostForm({
                   parsed.error.issues.map((i) => [String(i.path[0] || 'form'), i.message])
                 )
               )
+              requestAnimationFrame(() => summary.current?.focus())
               return
             }
             setErrors({})
@@ -82,11 +127,29 @@ export function HostForm({
               await onSave(parsed.data)
             } catch (error) {
               setErrors({ form: String(error) })
+              requestAnimationFrame(() => summary.current?.focus())
             } finally {
               setBusy(false)
             }
           }}
         >
+          {Object.keys(errors).length > 0 && (
+            <div className="form-error-summary" ref={summary} tabIndex={-1} role="alert">
+              <strong>
+                <AlertCircle size={16} />
+                请检查以下内容
+              </strong>
+              {Object.entries(errors).map(([key, value]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => document.getElementById(`${prefix}-${key}`)?.focus()}
+                >
+                  {errorLabels[key] || key}：{value}
+                </button>
+              ))}
+            </div>
+          )}
           <section className="form-section">
             <h2>连接目标</h2>
             <div className="form-grid">
@@ -94,6 +157,7 @@ export function HostForm({
                 'name',
                 '主机名称',
                 <input
+                  {...fieldProps('name')}
                   autoFocus
                   required
                   maxLength={100}
@@ -106,6 +170,7 @@ export function HostForm({
                 'address',
                 '主机地址',
                 <input
+                  {...fieldProps('address')}
                   required
                   value={form.address}
                   onChange={(e) => update('address', e.target.value)}
@@ -116,6 +181,7 @@ export function HostForm({
                 'port',
                 '公网连接端口',
                 <input
+                  {...fieldProps('port')}
                   type="number"
                   required
                   min={1}
@@ -129,6 +195,7 @@ export function HostForm({
                 'sshdPort',
                 '远端 sshd 监听端口（可选）',
                 <input
+                  {...fieldProps('sshdPort')}
                   type="number"
                   min={1}
                   max={65535}
@@ -144,6 +211,7 @@ export function HostForm({
                 'username',
                 '用户名',
                 <input
+                  {...fieldProps('username')}
                   required
                   value={form.username}
                   onChange={(e) => update('username', e.target.value)}
@@ -153,6 +221,7 @@ export function HostForm({
                 'group',
                 '分组',
                 <input
+                  {...fieldProps('group')}
                   value={form.group}
                   maxLength={60}
                   onChange={(e) => update('group', e.target.value)}
@@ -197,6 +266,7 @@ export function HostForm({
                 '私钥文件路径',
                 <div className="input-action">
                   <input
+                    {...fieldProps('keyPath')}
                     value={form.keyPath}
                     onChange={(e) => update('keyPath', e.target.value)}
                     placeholder="C:\Users\you\.ssh\id_ed25519"
@@ -224,8 +294,7 @@ export function HostForm({
             <div className="inline-note">
               <ShieldCheck size={16} />
               <span>
-                不会保存密码或私钥口令。首次连接需核对服务器指纹。加密私钥可在交互终端中输入口令；后台诊断需要预先可用的密钥或
-                Agent。
+                不保存密码或私钥口令。加密密钥可在终端中输入口令，后台诊断需要已就绪的密钥或 Agent。
               </span>
             </div>
           </section>
@@ -235,6 +304,7 @@ export function HostForm({
               'tags',
               '标签（逗号分隔）',
               <input
+                {...fieldProps('tags')}
                 value={tagsText}
                 onChange={(e) => setTagsText(e.target.value)}
                 placeholder="debian, edge"
@@ -244,6 +314,7 @@ export function HostForm({
               'notes',
               '备注',
               <textarea
+                {...fieldProps('notes')}
                 rows={3}
                 maxLength={4000}
                 value={form.notes}
@@ -252,20 +323,19 @@ export function HostForm({
               />
             )}
           </section>
-          {errors.form && (
-            <p className="error" role="alert">
-              {errors.form}
-            </p>
-          )}
           {host && (
             <p className="muted small">档案修改仅用于后续新操作；现有会话与任务保留原连接快照。</p>
           )}
-          <div className="form-actions">
+          <div className="form-actions host-form-actions">
+            <div className="form-connection-preview">
+              <span>{demo ? '演示档案 · 仅保存到内存' : '连接预览'}</span>
+              <code>{form.address ? endpoint(form) : '填写主机地址后显示连接目标'}</code>
+            </div>
             <Button type="button" onClick={onCancel}>
               取消
             </Button>
             <Button type="submit" variant="primary" disabled={busy}>
-              <Save size={15} />
+              <Save size={14} />
               {busy ? '正在保存…' : demo ? '保存演示档案' : '保存主机'}
             </Button>
           </div>

@@ -10,7 +10,7 @@
 
 ## v0.1 状态
 
-真实共享组件暂集中 index.tsx，主题在 themes/theme.css；不为少量组件增加空模块。
+真实共享组件暂集中 index.tsx，包含基于 Radix 的 Dialog/SidePanel 焦点与关闭处理，主题在 themes/theme.css；不为少量组件增加空模块。
 
 正式源码与说明由 SuPilot 独立仓库跟踪；生成产物和本机材料遵守项目忽略规则。
 

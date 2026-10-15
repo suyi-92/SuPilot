@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import {
   Activity,
-  ArrowDownToLine,
   ArrowRight,
   ChevronDown,
   ChevronRight,
@@ -29,10 +28,12 @@ import {
   Server,
   Settings2,
   ShieldCheck,
-  SquareTerminal,
   TerminalSquare,
   Trash2,
   Rows2,
+  RadioTower,
+  CheckCircle2,
+  AlertCircle,
   X
 } from 'lucide-react'
 import {
@@ -45,13 +46,15 @@ import {
   type Snapshot,
   type TrustChallenge
 } from '@supilot/contracts'
-import { Button, Dialog, IconButton, Status, TooltipProvider } from '@supilot/ui'
+import { Button, Dialog, IconButton, SidePanel, Status, TooltipProvider } from '@supilot/ui'
 import { useUI } from './state'
 import { demoSnapshot } from './demo'
 import { TerminalPane } from '../features/terminal/Terminal'
 import { HostForm, draftOf } from '../features/hosts/HostForm'
 import { Operations } from '../features/operations/Operations'
 import { TasksPage, time } from '../features/tasks/Tasks'
+import { QuickOpen } from './QuickOpen'
+import { endpoint } from './format'
 
 declare global {
   interface Window {
@@ -68,8 +71,8 @@ type Tab =
       direction: 'horizontal' | 'vertical'
     }
   | { id: string; kind: 'operation'; title: string; host?: Host; plugin: string }
-  | { id: string; kind: 'host'; title: string; host?: Host }
-  | { id: string; kind: 'tasks'; title: string; taskId?: string }
+  | { id: string; kind: 'host'; title: string; host?: Host; dirty?: boolean }
+  | { id: string; kind: 'tasks'; title: string; taskId?: string; selectionVersion?: number }
 type ConnectionIntent = {
   host: Host
   kind: 'session' | 'task'
@@ -93,9 +96,13 @@ export function App() {
   const [active, setActive] = useState('')
   const [selectedHost, setSelectedHost] = useState('')
   const [search, setSearch] = useState('')
+  const searchInput = useRef<HTMLInputElement>(null)
   const [collapsed, setCollapsed] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<{ message: string; kind: 'error' | 'success' }>()
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [narrow, setNarrow] = useState(() => window.innerWidth <= 1250)
+  const [detailsPeek, setDetailsPeek] = useState(false)
   const [settings, setSettings] = useState(false)
   const [trust, setTrust] = useState<{ challenge: TrustChallenge; intent: ConnectionIntent }>()
   const [confirm, setConfirm] = useState<{
@@ -122,8 +129,21 @@ export function App() {
   const attention = data.tasks.filter((t) =>
     ['failed', 'unknown', 'interrupted'].includes(t.state)
   ).length
-  const report = (message: string) =>
-    setToast(message.replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, ''))
+  const detailsVisible = !ui.focus && (narrow ? detailsPeek : ui.details)
+  const report = (message: string, kind: 'error' | 'success' = 'error') =>
+    setToast({
+      message: message.replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, ''),
+      kind
+    })
+  useEffect(() => {
+    const media = matchMedia('(max-width: 1250px)')
+    const change = () => {
+      setNarrow(media.matches)
+      setDetailsPeek(false)
+    }
+    media.addEventListener('change', change)
+    return () => media.removeEventListener('change', change)
+  }, [])
   useEffect(() => {
     const off = window.supilot.subscribe(setReal)
     void window.supilot
@@ -137,7 +157,8 @@ export function App() {
     document.documentElement.style.setProperty('--ui-font-size', `${ui.uiSize}px`)
   }, [ui.uiSize])
   useEffect(() => {
-    const timer = setTimeout(() => setToast(''), 14000)
+    if (toast?.kind !== 'success') return
+    const timer = setTimeout(() => setToast(undefined), 4500)
     return () => clearTimeout(timer)
   }, [toast])
   function addTab(tab: Tab) {
@@ -145,6 +166,8 @@ export function App() {
     setActive(tab.id)
   }
   function openEditor(host?: Host) {
+    setDetailsPeek(false)
+    ui.set({ tasks: false })
     const existing = tabs.find((t) => t.kind === 'host' && t.host?.id === host?.id)
     if (existing) {
       setActive(existing.id)
@@ -158,6 +181,7 @@ export function App() {
     })
   }
   function openOperation(host: Host | undefined, plugin = 'diagnostics') {
+    setDetailsPeek(false)
     ui.set({ tasks: false })
     const existing = tabs.find(
       (t) => t.kind === 'operation' && t.host?.id === host?.id && t.plugin === plugin
@@ -175,10 +199,18 @@ export function App() {
     })
   }
   function openTasks(id?: string) {
+    setDetailsPeek(false)
     ui.set({ tasks: false })
     const existing = tabs.find((t) => t.kind === 'tasks')
     if (existing) {
-      setTabs((v) => v.map((t) => (t.id === existing.id ? ({ ...t, taskId: id } as Tab) : t)))
+      if (id)
+        setTabs((v) =>
+          v.map((t) =>
+            t.id === existing.id && t.kind === 'tasks'
+              ? { ...t, taskId: id, selectionVersion: (t.selectionVersion || 0) + 1 }
+              : t
+          )
+        )
       setActive(existing.id)
     } else
       addTab({
@@ -219,6 +251,14 @@ export function App() {
     else void closeSession(id, tabId).catch((e) => report(String(e)))
   }
   function closeTab(tab: Tab) {
+    if (tab.kind === 'host' && tab.dirty) {
+      setConfirm({
+        title: '放弃未保存的修改',
+        text: `“${tab.title}”尚未保存，关闭后将丢弃本次表单内容。`,
+        action: async () => removeTab(tab.id)
+      })
+      return
+    }
     if (tab.kind !== 'terminal') {
       removeTab(tab.id)
       return
@@ -327,6 +367,7 @@ export function App() {
     }
   }
   function openHost(host: Host, force = false) {
+    setDetailsPeek(false)
     setSelectedHost(host.id)
     const existing = force
       ? undefined
@@ -357,9 +398,17 @@ export function App() {
       split: { tabId: current.id, direction }
     })
   }
-  function toggleDemo() {
+  function toggleDemo(discardChanges = false) {
     if (!demo && (real.sessions.some(activeSession) || real.tasks.some(activeTask))) {
       report('请先关闭真实终端并等待任务结束，再切换到独立演示模式。')
+      return
+    }
+    if (!discardChanges && tabs.some((tab) => tab.kind === 'host' && tab.dirty)) {
+      setConfirm({
+        title: '放弃修改并切换模式',
+        text: '主机表单尚未保存。切换模式会关闭工作标签并丢弃这些修改。',
+        action: async () => toggleDemo(true)
+      })
       return
     }
     const next = !demo
@@ -370,6 +419,8 @@ export function App() {
     setSearch('')
     setSelectedHost('')
     setTrust(undefined)
+    setToast(undefined)
+    setDetailsPeek(false)
     if (next) {
       const value = demoSnapshot()
       setSample(value)
@@ -401,7 +452,8 @@ export function App() {
     setSelectedHost(host.id)
     removeTab(tabId)
     report(
-      demo ? '演示档案已保存，仅存在内存中。' : '主机档案已保存。双击左侧主机即可打开 SSH 终端。'
+      demo ? '演示档案已保存，仅存在内存中。' : '主机档案已保存。双击主机即可连接。',
+      'success'
     )
   }
   function deleteHost(host: Host) {
@@ -435,26 +487,28 @@ export function App() {
   const filtered = data.hosts.filter((h) =>
     `${h.name} ${h.address} ${h.tags.join(' ')} ${h.group}`
       .toLowerCase()
-      .includes(search.toLowerCase())
+      .includes(search.trim().toLowerCase())
   )
   const groups = [...new Set(filtered.map((h) => h.group || '未分组'))]
   const lastTask = target ? data.tasks.find((t) => t.target.id === target.id) : undefined
   return (
     <TooltipProvider>
-      <div className={`app-shell ${ui.focus ? 'focus-mode' : ''}`}>
+      <div className={`app-shell ${ui.focus ? 'focus-mode' : ''} ${demo ? 'demo-mode' : ''}`}>
         <header className="app-header">
           <div className="brand">
-            <span className="brand-mark">
-              <Compass size={21} />
-            </span>
+            <Compass size={17} />
             <strong>SuPilot</strong>
-            <span className="version">0.1</span>
           </div>
-          <span className="header-divider" />
-          <span className="workspace-title">个人工作区</span>
-          <span className="header-local">
-            <ShieldCheck size={13} /> 本地优先
-          </span>
+          <div className="flex-1" />
+          <button
+            className="command-center"
+            aria-label="快速打开主机"
+            onClick={() => setQuickOpen(true)}
+          >
+            <Search size={13} />
+            <span>搜索并打开主机…</span>
+            <span className="command-context">{demo ? '演示工作区' : '本地工作区'}</span>
+          </button>
           <div className="flex-1" />
           {demo && (
             <span className="demo-banner">
@@ -468,12 +522,9 @@ export function App() {
               检查连接条件
             </span>
           )}
-          <Button variant="ghost" onClick={toggleDemo} disabled={busy}>
+          <Button variant="ghost" onClick={() => toggleDemo()} disabled={busy}>
             {demo ? '退出演示' : '演示模式'}
           </Button>
-          <IconButton label="界面与终端设置" onClick={() => setSettings(true)}>
-            <Settings2 size={17} />
-          </IconButton>
         </header>
         {real.engineError && !demo && (
           <div className="engine-error" role="alert">
@@ -484,20 +535,32 @@ export function App() {
           <div className="activity-rail">
             <IconButton
               label="主机导航"
-              aria-pressed={ui.sidebar}
+              aria-pressed={ui.sidebar && !ui.focus}
+              data-active={ui.sidebar && current?.kind !== 'operation' && current?.kind !== 'tasks'}
               onClick={() => ui.set({ sidebar: !ui.sidebar, focus: false })}
             >
-              <Server size={20} />
+              <Server size={24} />
             </IconButton>
-            <IconButton label="系统诊断" onClick={() => openOperation(selected || target)}>
-              <Activity size={20} />
+            <IconButton
+              label="系统诊断"
+              data-active={current?.kind === 'operation'}
+              onClick={() => openOperation(selected || target)}
+            >
+              <Activity size={24} />
             </IconButton>
-            <IconButton label="任务记录" onClick={() => openTasks()}>
-              <ClipboardList size={20} />
+            <IconButton
+              label="任务记录"
+              data-active={current?.kind === 'tasks'}
+              onClick={() => openTasks()}
+            >
+              <ClipboardList size={24} />
             </IconButton>
             <span className="flex-1" />
             <IconButton label="键盘与使用说明" onClick={() => setSettings(true)}>
-              <CircleHelp size={19} />
+              <CircleHelp size={23} />
+            </IconButton>
+            <IconButton label="界面与终端设置" onClick={() => setSettings(true)}>
+              <Settings2 size={23} />
             </IconButton>
           </div>
           <PanelGroup direction="horizontal" autoSaveId="supilot-main" className="main-panels">
@@ -506,8 +569,7 @@ export function App() {
                 <Panel id="hosts" order={1} defaultSize={20} minSize={16} maxSize={34}>
                   <aside className="host-sidebar">
                     <div className="sidebar-title">
-                      <h2>主机</h2>
-                      <span className="count">{data.hosts.length}</span>
+                      <h2>远程主机</h2>
                       <div className="flex-1" />
                       <IconButton label="添加主机" onClick={() => openEditor()}>
                         <Plus size={17} />
@@ -519,8 +581,9 @@ export function App() {
                     <div className="search-box">
                       <Search size={15} />
                       <input
+                        ref={searchInput}
                         aria-label="搜索主机"
-                        placeholder="搜索名称、地址或标签"
+                        placeholder="筛选主机…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                       />
@@ -531,6 +594,35 @@ export function App() {
                       )}
                     </div>
                     <div className="host-list">
+                      {tabs.some((tab) => tab.kind === 'terminal') && (
+                        <section className="open-sessions" aria-label="打开的会话">
+                          <h3 className="explorer-heading">打开的会话</h3>
+                          {tabs
+                            .filter((tab) => tab.kind === 'terminal')
+                            .map((tab) => (
+                              <button
+                                key={tab.id}
+                                className={`session-row ${active === tab.id ? 'selected' : ''}`}
+                                aria-pressed={active === tab.id}
+                                onClick={() => setActive(tab.id)}
+                              >
+                                <TerminalSquare size={15} />
+                                <span className="truncate">{tab.title}</span>
+                                <span className="count">
+                                  {tab.kind === 'terminal' ? tab.sessionIds.length : ''}
+                                </span>
+                              </button>
+                            ))}
+                        </section>
+                      )}
+                      <h3 className="explorer-heading">
+                        SSH 主机
+                        <span className="count">
+                          {search.trim()
+                            ? `${filtered.length} / ${data.hosts.length}`
+                            : data.hosts.length}
+                        </span>
+                      </h3>
                       {groups.map((group) => (
                         <section key={group}>
                           <button
@@ -564,29 +656,46 @@ export function App() {
                                   <button
                                     key={h.id}
                                     className={`host-row ${selectedHost === h.id ? 'selected' : ''}`}
+                                    aria-pressed={selectedHost === h.id}
                                     onClick={() => setSelectedHost(h.id)}
                                     onDoubleClick={() => openHost(h)}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') openHost(h)
+                                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                                        e.preventDefault()
+                                        const rows = Array.from(
+                                          e.currentTarget
+                                            .closest('.host-list')!
+                                            .querySelectorAll<HTMLButtonElement>('.host-row')
+                                        )
+                                        rows[
+                                          Math.max(
+                                            0,
+                                            Math.min(
+                                              rows.length - 1,
+                                              rows.indexOf(e.currentTarget) +
+                                                (e.key === 'ArrowDown' ? 1 : -1)
+                                            )
+                                          )
+                                        ]?.focus()
+                                      }
                                     }}
-                                    title={`${h.name}\n${h.username}@${h.address}:${h.port}`}
+                                    title={`${h.name}\n${endpoint(h)}\n${h.tags.join(' · ')}`}
                                   >
                                     <span className={`host-glyph ${live ? 'live' : ''}`}>
                                       <Server size={16} />
                                     </span>
                                     <span className="host-copy">
                                       <strong>{h.name}</strong>
-                                      <small>
-                                        {h.address}
-                                        <span>
-                                          {demo
-                                            ? '演示'
-                                            : live
-                                              ? '会话已打开'
-                                              : h.tags[0] || '未连接'}
-                                        </span>
-                                      </small>
+                                      {search.trim() && (
+                                        <small className="search-match">
+                                          {h.address} · {h.tags.join(', ')}
+                                        </small>
+                                      )}
                                     </span>
+                                    {live && (
+                                      <span className="host-state">{demo ? '模拟' : '会话'}</span>
+                                    )}
                                   </button>
                                 )
                               })}
@@ -613,9 +722,8 @@ export function App() {
                         <>
                           <div>
                             <strong className="truncate">{selected.name}</strong>
-                            <span>
-                              {selected.username} ·{' '}
-                              {selected.auth === 'agent' ? 'SSH Agent' : '私钥文件'}
+                            <span className="truncate" title={endpoint(selected)}>
+                              {endpoint(selected)}
                             </span>
                           </div>
                           <div className="selection-actions">
@@ -648,11 +756,41 @@ export function App() {
               <main className="workspace">
                 <div className="tab-bar">
                   <div className="tabs" role="tablist" aria-label="工作标签">
+                    {!tabs.length && (
+                      <span className="welcome-tab">
+                        <Compass size={14} />
+                        欢迎使用
+                      </span>
+                    )}
                     {tabs.map((tab) => (
                       <div className={`work-tab ${active === tab.id ? 'active' : ''}`} key={tab.id}>
                         <button
                           role="tab"
                           aria-selected={active === tab.id}
+                          id={`tab-${tab.id}`}
+                          aria-controls={`content-${tab.id}`}
+                          tabIndex={active === tab.id ? 0 : -1}
+                          title={
+                            tab.kind === 'host' && tab.dirty ? `${tab.title} · 未保存` : tab.title
+                          }
+                          onKeyDown={(e) => {
+                            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+                            e.preventDefault()
+                            const i = tabs.indexOf(tab)
+                            const next =
+                              tabs[
+                                e.key === 'Home'
+                                  ? 0
+                                  : e.key === 'End'
+                                    ? tabs.length - 1
+                                    : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) %
+                                      tabs.length
+                              ]
+                            setActive(next.id)
+                            requestAnimationFrame(() =>
+                              document.getElementById(`tab-${next.id}`)?.focus()
+                            )
+                          }}
                           onClick={() => setActive(tab.id)}
                         >
                           {tab.kind === 'terminal' ? (
@@ -665,6 +803,9 @@ export function App() {
                             <Activity size={14} />
                           )}
                           <span>{tab.title}</span>
+                          {tab.kind === 'host' && tab.dirty && (
+                            <span className="dirty-dot" aria-label="未保存" />
+                          )}
                         </button>
                         <IconButton label={`关闭标签 ${tab.title}`} onClick={() => closeTab(tab)}>
                           <X size={12} />
@@ -706,20 +847,24 @@ export function App() {
                         <PanelLeftOpen size={15} />
                       </IconButton>
                     )}
-                    <IconButton
-                      label="左右分屏"
-                      disabled={current?.kind !== 'terminal' || busy}
-                      onClick={() => split('horizontal')}
-                    >
-                      <Columns2 size={16} />
-                    </IconButton>
-                    <IconButton
-                      label="上下分屏"
-                      disabled={current?.kind !== 'terminal' || busy}
-                      onClick={() => split('vertical')}
-                    >
-                      <Rows2 size={16} />
-                    </IconButton>
+                    {current?.kind === 'terminal' && (
+                      <>
+                        <IconButton
+                          label="左右分屏"
+                          disabled={current?.kind !== 'terminal' || busy}
+                          onClick={() => split('horizontal')}
+                        >
+                          <Columns2 size={16} />
+                        </IconButton>
+                        <IconButton
+                          label="上下分屏"
+                          disabled={current?.kind !== 'terminal' || busy}
+                          onClick={() => split('vertical')}
+                        >
+                          <Rows2 size={16} />
+                        </IconButton>
+                      </>
+                    )}
                     <IconButton
                       label={ui.focus ? '退出专注模式' : '专注终端'}
                       aria-pressed={ui.focus}
@@ -728,16 +873,32 @@ export function App() {
                       <Maximize2 size={15} />
                     </IconButton>
                     <IconButton
-                      label={ui.details ? '收起详情' : '展开详情'}
-                      onClick={() => ui.set({ details: !ui.details, focus: false })}
+                      label={detailsVisible ? '收起详情' : '展开详情'}
+                      aria-pressed={detailsVisible}
+                      onClick={() => {
+                        if (narrow) setDetailsPeek(!detailsPeek)
+                        else ui.set({ details: !ui.details })
+                        ui.set({ focus: false })
+                      }}
                     >
-                      {ui.details ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                      {detailsVisible ? (
+                        <PanelRightClose size={16} />
+                      ) : (
+                        <PanelRightOpen size={16} />
+                      )}
                     </IconButton>
                   </div>
                 </div>
                 <div className="work-content">
                   {tabs.map((tab) => (
-                    <div className="tab-content" key={tab.id} hidden={active !== tab.id}>
+                    <div
+                      className="tab-content"
+                      key={tab.id}
+                      id={`content-${tab.id}`}
+                      role="tabpanel"
+                      aria-labelledby={`tab-${tab.id}`}
+                      hidden={active !== tab.id}
+                    >
                       {tab.kind === 'terminal' ? (
                         <PanelGroup direction={tab.direction}>
                           {tab.sessionIds
@@ -782,7 +943,16 @@ export function App() {
                           host={tab.host}
                           demo={demo}
                           onSave={(h) => saveHost(h, tab.id)}
-                          onCancel={() => removeTab(tab.id)}
+                          onCancel={() => closeTab(tab)}
+                          onDirtyChange={(dirty) =>
+                            setTabs((items) =>
+                              items.some(
+                                (t) => t.id === tab.id && t.kind === 'host' && t.dirty !== dirty
+                              )
+                                ? items.map((t) => (t.id === tab.id ? { ...t, dirty } : t))
+                                : items
+                            )
+                          }
                         />
                       ) : tab.kind === 'operation' ? (
                         <Operations
@@ -794,7 +964,7 @@ export function App() {
                         />
                       ) : (
                         <TasksPage
-                          key={tab.id}
+                          key={`${tab.id}-${tab.selectionVersion || 0}`}
                           tasks={data.tasks}
                           initialId={tab.taskId}
                           onCancel={cancelTask}
@@ -809,46 +979,44 @@ export function App() {
                   ))}
                   {!tabs.length && (
                     <div className="welcome">
-                      <div className="welcome-graphic">
-                        <TerminalSquare size={38} />
-                        <span className="graphic-line" />
-                        <span className="graphic-line short" />
-                      </div>
-                      <span className="eyebrow">YOUR SERVERS. YOUR WORKSPACE.</span>
-                      <h1>连接主机，从这里开始。</h1>
-                      <p>
-                        终端、主机与只读诊断，在一个安静而专注的工作区。
-                        <br />
-                        你的数据留在本机，连接交给系统 OpenSSH。
-                      </p>
-                      <div className="welcome-actions">
-                        <Button variant="primary" onClick={() => openEditor()}>
-                          <Plus size={16} />
-                          添加主机
-                        </Button>
-                        <Button onClick={toggleDemo}>
-                          <FlaskConical size={16} />
-                          {demo ? '退出演示模式' : '探索演示工作区'}
-                        </Button>
-                      </div>
-                      <div className="welcome-guide">
-                        <div>
-                          <span>01</span>
-                          <strong>保存主机</strong>
-                          <p>地址、身份与密钥引用</p>
-                        </div>
-                        <ArrowRight size={15} />
-                        <div>
-                          <span>02</span>
-                          <strong>打开终端</strong>
-                          <p>核对指纹，连接服务器</p>
-                        </div>
-                        <ArrowRight size={15} />
-                        <div>
-                          <span>03</span>
-                          <strong>检查状态</strong>
-                          <p>独立诊断，留存结果</p>
-                        </div>
+                      <h1>SuPilot</h1>
+                      <p className="welcome-subtitle">主机、终端与诊断，一个工作区。</p>
+                      <div className="welcome-columns">
+                        <section>
+                          <h2>开始</h2>
+                          <button className="welcome-link" onClick={() => openEditor()}>
+                            <Plus size={16} />
+                            添加主机…
+                          </button>
+                          <button className="welcome-link" onClick={() => toggleDemo()}>
+                            <FlaskConical size={16} />
+                            {demo ? '退出演示模式' : '探索演示工作区'}
+                          </button>
+                          <button className="welcome-link" onClick={() => setSettings(true)}>
+                            <Settings2 size={16} />
+                            界面与终端设置
+                          </button>
+                          <p className="welcome-note">
+                            主机数据保存在本机。
+                            <br />
+                            连接使用系统 OpenSSH，无需远端 Agent。
+                          </p>
+                        </section>
+                        <section className="welcome-guide">
+                          <h2>工作流程</h2>
+                          <p>
+                            <strong>1. 添加连接</strong>
+                            <span>保存地址、用户与密钥引用。</span>
+                          </p>
+                          <p>
+                            <strong>2. 打开终端</strong>
+                            <span>双击主机，核对指纹后连接。</span>
+                          </p>
+                          <p>
+                            <strong>3. 运行诊断</strong>
+                            <span>独立执行只读检查，查看任务记录。</span>
+                          </p>
+                        </section>
                       </div>
                       {loading ? (
                         <p className="muted">
@@ -920,22 +1088,26 @@ export function App() {
               </main>
             </Panel>
           </PanelGroup>
-          {ui.details && !ui.focus && (
-            <aside className="details-sidebar">
+          {detailsVisible && (
+            <SidePanel floating={narrow} title="主机详情" onClose={() => setDetailsPeek(false)}>
               <header>
                 <h2>主机详情</h2>
-                <IconButton label="关闭详情栏" onClick={() => ui.set({ details: false })}>
+                <IconButton
+                  label="关闭详情栏"
+                  onClick={() => {
+                    setDetailsPeek(false)
+                    if (!narrow) ui.set({ details: false })
+                  }}
+                >
                   <X size={15} />
                 </IconButton>
               </header>
               {target ? (
                 <>
+                  <h3 className="explorer-heading">连接目标</h3>
                   <div className="detail-identity">
-                    <span className="detail-server">
-                      <Server size={24} />
-                    </span>
                     <h3>{target.name}</h3>
-                    <code>{target.address}</code>
+                    <code>{endpoint(target)}</code>
                     <span className="detail-state">
                       {currentSession ? (
                         currentSession.demo ? (
@@ -980,7 +1152,13 @@ export function App() {
                     {lastTask ? (
                       <>
                         <Status state={lastTask.state} />
-                        <p>{time(lastTask.finishedAt || lastTask.createdAt)}</p>
+                        <button
+                          className="detail-report-link"
+                          onClick={() => openTasks(lastTask.id)}
+                        >
+                          {time(lastTask.finishedAt || lastTask.createdAt)}
+                          <ChevronRight size={14} />
+                        </button>
                         <small>
                           {lastTask.demo
                             ? '合成数据，仅用于界面演示'
@@ -1014,7 +1192,7 @@ export function App() {
                       onClick={() =>
                         void navigator.clipboard
                           .writeText(target.address)
-                          .then(() => report('主机地址已复制。'))
+                          .then(() => report('主机地址已复制。', 'success'))
                           .catch(() => report('复制失败。'))
                       }
                     >
@@ -1022,10 +1200,10 @@ export function App() {
                       复制地址
                     </button>
                   </div>
-                  <div className="detail-section">
-                    <h4>
+                  <details className="detail-section detail-fold">
+                    <summary>
                       扩展能力 <span>规划中</span>
-                    </h4>
+                    </summary>
                     <button
                       className="detail-action muted"
                       onClick={() => openOperation(target, 'surelay')}
@@ -1042,12 +1220,12 @@ export function App() {
                       Access
                       <ChevronRight size={13} />
                     </button>
-                  </div>
+                  </details>
                   {target.notes && (
-                    <div className="detail-section">
-                      <h4>备注</h4>
+                    <details className="detail-section detail-fold">
+                      <summary>备注</summary>
                       <p>{target.notes}</p>
-                    </div>
+                    </details>
                   )}
                   <div className="detail-footnote">
                     <Info size={13} />
@@ -1061,12 +1239,12 @@ export function App() {
                   <small>打开终端或操作标签后，这里会显示对应主机与连接信息。</small>
                 </div>
               )}
-            </aside>
+            </SidePanel>
           )}
         </div>
         <footer className="status-bar">
-          <span>
-            <span className={`status-dot ${demo ? 'demo' : ''}`} />
+          <span className="status-remote">
+            <RadioTower size={13} />
             {demo
               ? 'DEMO · 合成数据'
               : real.engineError
@@ -1087,13 +1265,22 @@ export function App() {
           <span>UTF-8</span>
         </footer>
         {toast && (
-          <div className="toast" role="alert">
-            <Info size={17} />
-            <span>{toast}</span>
-            <IconButton label="关闭提示" onClick={() => setToast('')}>
+          <div
+            className={`toast toast-${toast.kind}`}
+            role={toast.kind === 'error' ? 'alert' : 'status'}
+          >
+            {toast.kind === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+            <div>
+              <strong>{toast.kind === 'error' ? '操作未完成' : '已完成'}</strong>
+              <span>{toast.message}</span>
+            </div>
+            <IconButton label="关闭提示" onClick={() => setToast(undefined)}>
               <X size={15} />
             </IconButton>
           </div>
+        )}
+        {quickOpen && (
+          <QuickOpen hosts={data.hosts} onClose={() => setQuickOpen(false)} onOpen={openHost} />
         )}
         <Dialog
           open={!!trust}
@@ -1105,10 +1292,7 @@ export function App() {
             <>
               <div className="trust-target">
                 <strong>{trust.challenge.target.name}</strong>
-                <code>
-                  {trust.challenge.target.username}@{trust.challenge.target.address}:
-                  {trust.challenge.target.port}
-                </code>
+                <code>{endpoint(trust.challenge.target)}</code>
               </div>
               <div className="fingerprints">
                 {trust.challenge.keys.map((k) => (
@@ -1203,8 +1387,9 @@ export function App() {
               <span>终端 ANSI 配色</span>
               <select
                 value={ui.ansi}
-                onChange={(e) => ui.set({ ansi: e.target.value as 'graphite' | 'classic' })}
+                onChange={(e) => ui.set({ ansi: e.target.value as typeof ui.ansi })}
               >
+                <option value="dark-plus">Dark+ · VS Code 经典深色</option>
                 <option value="graphite">Graphite · 柔和冷色</option>
                 <option value="classic">Classic · 经典配色</option>
               </select>

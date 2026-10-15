@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   TerminalSquare
 } from 'lucide-react'
+import { endpoint } from '../../app/format'
 
 export function Operations({
   host,
@@ -39,14 +40,14 @@ export function Operations({
           <div>
             <h1>
               {available
-                ? '了解主机此刻的状态'
+                ? '系统诊断'
                 : plugin === 'surelay'
                   ? 'SuRelay 服务管理'
                   : 'SSH 接入与访问保护'}
             </h1>
             <p className="page-lead">
               {available
-                ? '一次轻量检查，汇总系统、运行时间、磁盘与内存。'
+                ? '检查系统、运行时间、磁盘与内存，结果保存到任务记录。'
                 : '已保留扩展入口，v0.1 尚未实现远端修改能力。'}
             </p>
           </div>
@@ -58,12 +59,12 @@ export function Operations({
         <div className="target-strip">
           <TerminalSquare size={20} />
           <div>
-            <span className="overline">固定操作目标</span>
+            <span className="overline">检查目标</span>
             <strong>{host?.name || '尚未选择主机'}</strong>
           </div>
           <div className="target-endpoint">
-            {host ? `${host.username}@${host.address}:${host.port}` : '请从主机详情打开操作'}
-            {demo && <span className="demo-label">演示目标 · 无网络连接</span>}
+            {host ? <code>{endpoint(host)}</code> : '请从主机详情打开操作'}
+            {demo && <span className="demo-label">演示数据 · 不连接主机</span>}
           </div>
         </div>
         {available ? (
@@ -96,22 +97,29 @@ export function Operations({
               <div>
                 <ShieldCheck size={18} />
                 <div>
-                  <strong>不占用当前终端</strong>
-                  <p>每项检查通过独立连接执行，不向交互会话注入命令，也不修改远端配置。</p>
+                  <strong>独立执行，不影响终端输入</strong>
+                  <p>4 项只读查询，不修改远端配置。</p>
                 </div>
               </div>
               <div>
                 <Info size={18} />
                 <div>
-                  <strong>需要可用的密钥或 SSH Agent</strong>
-                  <p>
-                    后台不会等待密码或口令。单项超时 20 秒，输出上限 128 KiB；不可用项将如实标记。
-                  </p>
+                  <strong>认证需要提前就绪</strong>
+                  <p>使用已有密钥或 SSH Agent，后台不等待密码或口令。</p>
                 </div>
               </div>
             </div>
+            <details className="execution-details">
+              <summary>执行限制与结果说明</summary>
+              <p>
+                每项通过独立 SSH 连接执行，单项超时 20 秒，输出最多 128
+                KiB。缺少工具时标记为不可用；连接中断或结果不完整会明确记录，不推断执行成功。
+              </p>
+            </details>
             <div className="operation-footer">
-              <span className="muted">结果与步骤自动保存到任务记录</span>
+              <span className="muted">
+                {host ? '4 项检查 · 结果自动保存' : '请先选择主机，再从详情中打开诊断'}
+              </span>
               <Button variant="primary" disabled={!host || busy} onClick={onRun}>
                 <Play size={15} />
                 {busy ? '检查连接条件…' : demo ? '运行演示诊断' : '开始只读诊断'}

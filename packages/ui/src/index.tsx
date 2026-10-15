@@ -1,7 +1,55 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { X, Check, AlertTriangle, Circle, LoaderCircle, CircleHelp } from 'lucide-react'
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode, RefObject } from 'react'
+import { useRef } from 'react'
+
+// Use Radix focus containment and dismissal when a docked panel becomes an overlay.
+export function SidePanel({
+  floating,
+  title,
+  onClose,
+  children
+}: {
+  floating: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  const returnFocus = useRef<HTMLElement | null>(null)
+  if (!floating)
+    return (
+      <aside className="details-sidebar" aria-label={title}>
+        {children}
+      </aside>
+    )
+  return (
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="details-backdrop" />
+        <DialogPrimitive.Content
+          className="details-sidebar peek"
+          aria-describedby={undefined}
+          onOpenAutoFocus={() => {
+            returnFocus.current = document.activeElement as HTMLElement
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            if (returnFocus.current?.isConnected) returnFocus.current.focus({ preventScroll: true })
+          }}
+        >
+          <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  )
+}
 
 export function Button({
   variant = 'default',
@@ -15,12 +63,13 @@ export function Button({
 export function IconButton({
   label,
   children,
+  className = '',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>
-        <button aria-label={label} className="icon-button" {...props}>
+        <button type="button" aria-label={label} className={`icon-button ${className}`} {...props}>
           {children}
         </button>
       </Tooltip.Trigger>
@@ -41,12 +90,16 @@ export function Dialog({
   onClose,
   title,
   description,
+  className = '',
+  initialFocus,
   children
 }: {
   open: boolean
   onClose: () => void
   title: string
   description: string
+  className?: string
+  initialFocus?: RefObject<HTMLElement | null>
   children: ReactNode
 }) {
   return (
@@ -58,8 +111,16 @@ export function Dialog({
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="dialog-overlay" />
-        <DialogPrimitive.Content className="dialog-content">
-          <div className="flex items-center justify-between">
+        <DialogPrimitive.Content
+          className={`dialog-content ${className}`}
+          onOpenAutoFocus={(event) => {
+            if (initialFocus?.current) {
+              event.preventDefault()
+              initialFocus.current.focus()
+            }
+          }}
+        >
+          <div className="dialog-header">
             <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
             <DialogPrimitive.Close asChild>
               <button className="icon-button" aria-label="关闭对话框">

@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeTheme,
   MessageChannelMain,
   utilityProcess,
   type UtilityProcess,
@@ -20,6 +21,8 @@ const profile =
 app.setPath('userData', join(app.getPath('appData'), profile))
 mkdirSync(app.getPath('userData'), { recursive: true })
 app.setName('SuPilot')
+// Match the fixed dark workbench while retaining native Windows caption controls.
+nativeTheme.themeSource = 'dark'
 if (!app.requestSingleInstanceLock()) app.exit(0)
 let window: BrowserWindow
 app.on('second-instance', () => {
@@ -136,7 +139,7 @@ app.whenReady().then(async () => {
     minWidth: 850,
     minHeight: 600,
     title: 'SuPilot',
-    backgroundColor: '#171A20',
+    backgroundColor: '#1e1e1e',
     icon: join(import.meta.dirname, '../../resources/icon.png'),
     show: false,
     webPreferences: {

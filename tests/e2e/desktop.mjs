@@ -56,6 +56,13 @@ async function launch() {
 }
 try {
   let page = await launch()
+  // Keep visual checks reproducible without changing the user's production profile.
+  await page.getByRole('button', { name: '界面与终端设置', exact: true }).first().click()
+  await page.getByLabel('界面字号', { exact: true }).fill('13')
+  await page.getByLabel('终端字号', { exact: true }).fill('14')
+  await page.getByLabel('终端 ANSI 配色').selectOption('dark-plus')
+  await page.getByRole('button', { name: '完成', exact: true }).click()
+  await page.screenshot({ path: join(output, 'welcome.png') })
   const initial = await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))
   assert.match(initial.dataPath, /SuPilot-test$/)
   assert.equal(initial.engineError, undefined)
@@ -92,11 +99,37 @@ try {
   )
   const name = `本地持久化验证-${Date.now()}`
   await page.getByRole('button', { name: '添加主机', exact: true }).first().click()
+  assert.equal(
+    await page.getByRole('button', { name: '保存主机', exact: true }).evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      return box.top >= 0 && box.bottom <= innerHeight
+    }),
+    true,
+    'Save action is visible without scrolling'
+  )
+  await page.getByRole('button', { name: '保存主机', exact: true }).click()
+  await page.waitForFunction(() => document.activeElement?.classList.contains('form-error-summary'))
+  await page.locator('.form-error-summary button').filter({ hasText: '主机地址' }).click()
+  assert.equal(
+    await page
+      .getByLabel('主机地址', { exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true
+  )
+  await page.screenshot({ path: join(output, 'host-form-error.png') })
   await page.getByLabel('主机名称', { exact: true }).fill(name)
+  await page.getByRole('button', { name: '取消', exact: true }).click()
+  await page.getByRole('heading', { name: '放弃未保存的修改', exact: true }).waitFor()
+  await page.getByRole('button', { name: '返回', exact: true }).click()
+  assert.equal(await page.getByLabel('主机名称', { exact: true }).inputValue(), name)
+  await page.getByRole('button', { name: '演示模式', exact: true }).click()
+  await page.getByRole('heading', { name: '放弃修改并切换模式', exact: true }).waitFor()
+  await page.getByRole('button', { name: '返回', exact: true }).click()
   await page.getByLabel('主机地址', { exact: true }).fill('192.0.2.250')
   await page.getByLabel('公网连接端口').fill('22022')
   await page.getByLabel('远端 sshd 监听端口（可选）').fill('22')
   await page.getByLabel('分组', { exact: true }).fill('E2E 合成数据')
+  await page.screenshot({ path: join(output, 'host-form.png') })
   await page.getByRole('button', { name: '保存主机', exact: true }).click()
   await page.waitForFunction(
     (name) => document.querySelector('.host-list')?.textContent.includes(name),
@@ -116,21 +149,87 @@ try {
   report.checks.push(
     'Host added through form, NAT port fields distinct, persisted across application restart'
   )
+  report.checks.push(
+    'Sticky save action; invalid form focuses error summary and field links; close and mode-switch preserve unsaved edits when dismissed'
+  )
   await page.getByRole('button', { name: '演示模式', exact: true }).click()
   await page.waitForSelector('.terminal-pane .xterm-screen')
   assert.equal(await page.locator('.terminal-pane').count(), 2)
+  await page.getByRole('button', { name: '快速打开主机', exact: true }).click()
+  assert.equal(
+    await page
+      .getByRole('combobox', { name: '快速搜索主机' })
+      .evaluate((el) => document.activeElement === el),
+    true
+  )
+  await page.getByRole('combobox', { name: '快速搜索主机' }).fill('alpine')
+  assert.equal(await page.getByRole('option').count(), 1)
+  await page.screenshot({ path: join(output, 'quick-open.png') })
+  await page.keyboard.press('Escape')
+  assert.equal(await page.locator('.terminal-pane').count(), 2)
+  await page.getByRole('button', { name: '快速打开主机', exact: true }).click()
+  await page.getByRole('combobox', { name: '快速搜索主机' }).fill('东京 · 边缘节点 01')
+  await page.keyboard.press('Enter')
+  assert.equal(
+    await page.locator('.terminal-pane').count(),
+    2,
+    'Quick open reuses an existing session'
+  )
+  await page.getByLabel('搜索主机', { exact: true }).fill('alpine')
+  assert.equal(await page.locator('.host-row').count(), 1)
+  await page.getByRole('button', { name: '清除搜索', exact: true }).click()
+  assert.equal(await page.locator('.host-row').count(), 14)
+  await page.locator('.host-row').filter({ hasText: '北京' }).click()
+  assert.match(await page.locator('.host-selection strong').innerText(), /北京/)
+  assert.match(await page.locator('.detail-identity h3').innerText(), /东京/)
+  await page.locator('.host-row').filter({ hasText: '东京 · 边缘节点 01' }).click()
+  assert.equal(
+    await page
+      .locator('.drawer-task')
+      .first()
+      .evaluate((el) => getComputedStyle(el).display),
+    'grid'
+  )
+  await page.waitForTimeout(250)
   await page.screenshot({ path: join(output, 'workspace.png') })
   const before = await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))
   assert.equal(before.sessions.length, 0)
   await page.getByRole('button', { name: '上下分屏', exact: true }).click()
   await page.getByRole('button', { name: '左右分屏', exact: true }).click()
   await page.getByRole('button', { name: '系统诊断', exact: true }).first().click()
-  await page.getByRole('heading', { name: '了解主机此刻的状态' }).waitFor()
+  await page.getByRole('heading', { name: '系统诊断', exact: true }).waitFor()
   await page.screenshot({ path: join(output, 'operation.png') })
   await page.getByRole('button', { name: '运行演示诊断', exact: true }).click()
   await page.locator('.task-detail').waitFor()
   await page.screenshot({ path: join(output, 'tasks.png') })
-  await page.getByRole('tab', { name: /东京 \/ 新加坡/ }).click()
+  await page.getByLabel('筛选任务').filter({ visible: true }).selectOption('attention')
+  await page.waitForFunction(() =>
+    document.querySelector('.result-message')?.textContent.includes('SSH Agent')
+  )
+  assert.match(await page.locator('.detail-identity h3').innerText(), /香港/)
+  await page.screenshot({ path: join(output, 'task-failed.png') })
+  await page.getByRole('button', { name: '自动换行', exact: true }).click()
+  assert.equal(
+    await page.getByLabel('只读诊断日志').evaluate((el) => getComputedStyle(el).whiteSpace),
+    'pre-wrap'
+  )
+  await page.getByLabel('搜索任务主机').fill('no-such-host')
+  await page.getByRole('heading', { name: '没有匹配的记录', exact: true }).waitFor()
+  assert.equal(await page.locator('.task-detail').count(), 0)
+  await page.getByRole('button', { name: '显示全部任务', exact: true }).click()
+  await page.getByLabel('筛选任务').filter({ visible: true }).selectOption('attention')
+  await page.getByRole('tab', { name: '系统诊断', exact: true }).click()
+  await page.getByRole('button', { name: '运行演示诊断', exact: true }).click()
+  assert.equal(await page.getByLabel('筛选任务').filter({ visible: true }).inputValue(), 'all')
+  assert.match(await page.locator('.result-message').innerText(), /已完成/)
+  report.checks.push(
+    'Task filters keep result and inspector synchronized; empty results clear detail; explicit navigation resets stale filters; logs preserve columns and optionally wrap'
+  )
+  await page.locator('.session-row').filter({ hasText: '东京 / 新加坡' }).click()
+  assert.equal(
+    await page.getByRole('tab', { name: /东京 \/ 新加坡/ }).getAttribute('aria-selected'),
+    'true'
+  )
   assert.equal(await page.locator('.terminal-pane').count(), 2)
   assert.equal(
     (await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))).tasks.length,
@@ -139,10 +238,55 @@ try {
   report.checks.push(
     'Demo has 14 hosts, two preserved terminal panes, operation and task tabs; no real sessions/tasks created'
   )
+  report.checks.push(
+    'Quick-open search and Enter reuse, Escape dismissal; sidebar tag filtering; selection preserves active target; open-session navigator restores its tab; task rows use aligned columns'
+  )
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 650))
   await page.waitForTimeout(250) // Allow ResizeObserver, xterm fit and font metrics to settle.
   assert.equal(await page.locator('.details-sidebar').isVisible(), false)
   await page.screenshot({ path: join(output, 'workspace-small.png') })
+  await page.getByRole('button', { name: '展开详情', exact: true }).click()
+  await page.getByRole('dialog', { name: '主机详情', exact: true }).waitFor()
+  assert.equal(
+    await page
+      .getByRole('button', { name: '关闭详情栏', exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true
+  )
+  await page.keyboard.press('Shift+Tab')
+  assert.equal(
+    await page.evaluate(() => !!document.activeElement?.closest('.details-sidebar')),
+    true
+  )
+  await page.screenshot({ path: join(output, 'details-small.png') })
+  await page.keyboard.press('Escape')
+  assert.equal(await page.getByRole('dialog', { name: '主机详情', exact: true }).count(), 0)
+  await page.getByRole('tab', { name: '任务记录', exact: true }).click()
+  await page.getByLabel('选择任务记录').waitFor({ state: 'visible' })
+  await page.getByLabel('筛选任务').filter({ visible: true }).selectOption('attention')
+  await page.screenshot({ path: join(output, 'tasks-small.png') })
+  const taskTab = page.getByRole('tab', { name: '任务记录', exact: true })
+  await taskTab.focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.waitForFunction(
+    () =>
+      document.activeElement?.getAttribute('role') === 'tab' &&
+      document.activeElement?.textContent.includes('系统诊断')
+  )
+  await page.getByRole('tab', { name: /东京 \/ 新加坡/ }).click()
+  await page.getByRole('button', { name: '添加主机', exact: true }).first().click()
+  assert.equal(
+    await page
+      .getByRole('button', { name: '保存演示档案', exact: true })
+      .evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight),
+    true
+  )
+  await page.screenshot({ path: join(output, 'host-form-small.png') })
+  await page.getByRole('button', { name: '取消', exact: true }).click()
+  await page.getByRole('tab', { name: /东京 \/ 新加坡/ }).click()
+  report.checks.push(
+    'Narrow detail overlay has focus containment and Escape dismissal; compact task selector and sticky form actions remain usable; work tabs support arrow navigation'
+  )
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows()[0]
     w.setSize(1440, 940)
@@ -228,7 +372,7 @@ try {
     { port: fixture.port, login: fixture.login }
   )
   loopId = loopHost.id
-  await page.locator(`.host-row[title$=":${fixture.port}"]`).dblclick()
+  await page.locator(`.host-row[title*="127.0.0.1:${fixture.port}"]`).dblclick()
   await page.getByRole('heading', { name: '核对服务器身份' }).waitFor()
   await page.getByRole('button', { name: '已独立核对，信任并继续' }).click()
   await waitSnapshot(page, (snapshot) => snapshot.sessions.some((s) => s.state === 'authenticated'))

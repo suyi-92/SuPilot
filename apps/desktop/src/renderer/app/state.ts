@@ -15,7 +15,7 @@ type UI = {
   focus: boolean
   uiSize: number
   terminalSize: number
-  ansi: 'graphite' | 'classic'
+  ansi: 'dark-plus' | 'graphite' | 'classic'
   set: (values: Partial<Omit<UI, 'set'>>) => void
 }
 export const useUI = create<UI>((set, get) => ({
@@ -23,9 +23,9 @@ export const useUI = create<UI>((set, get) => ({
   details: true,
   tasks: false,
   focus: false,
-  uiSize: Math.min(17, Math.max(12, Number(saved.uiSize) || 14)),
+  uiSize: Math.min(17, Math.max(12, Number(saved.uiSize) || 13)),
   terminalSize: Math.min(22, Math.max(11, Number(saved.terminalSize) || 14)),
-  ansi: saved.ansi === 'classic' ? 'classic' : 'graphite',
+  ansi: saved.ansi === 'classic' || saved.ansi === 'graphite' ? saved.ansi : 'dark-plus',
   set: (values) => {
     set(values)
     const s = get()

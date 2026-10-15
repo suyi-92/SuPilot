@@ -78,9 +78,11 @@ Electron 首次安装需下载官方二进制；网络受限时配置当前命�
 桌面 E2E 覆盖：
 
 - 非法参数和第二个 BrowserWindow 的 IPC 请求被拒绝。
-- 表单新增主机、公网与 sshd 端口区分、退出重启后持久化、删除。
+- 表单新增主机、公网与 sshd 端口区分、退出重启后持久化、删除；固定保存操作、错误摘要与字段焦点、未保存关闭/模式切换保护。
 - 演示 14 主机、两个窗格、标签/方向切换、操作/任务结果，真实 Engine 不产生演示会话或任务。
-- 900×650 布局及 Chromium 125%/150% 缩放，详情栏优先隐藏。
+- VS Code 风格工作区：快速打开搜索/Enter 复用会话/Esc 关闭、左侧标签筛选、单击主机不改变当前工作目标、“打开的会话”导航、任务列对齐；视觉检查使用测试配置中的 13px UI / 14px Dark+ 终端。
+- 任务状态/主机筛选同步详情，空结果清空详情，外部指定记录重置旧筛选；只读日志对齐和可选换行。
+- 900×650 布局及 Chromium 125%/150% 缩放，详情栏优先隐藏；浮动详情焦点约束和 Esc 关闭，紧凑任务选择、窄窗口固定保存操作、标签键盘导航。
 - 实际应用的 utilityProcess 加载自身 node-pty / SQLite，本地 PowerShell ConPTY 输入输出、111 列尺寸、中文和 11000 字符粘贴。
 - 完整 xterm → MessagePort → Engine → ConPTY → 系统 OpenSSH 链路，首次指纹确认、认证标记、Unicode、Ctrl+C/D/R、替代屏幕、超过 200 KiB 输出、切换标签后会话保留。
 - UI 剪贴板长粘贴与任务日志复制。
@@ -90,7 +92,7 @@ Electron 首次安装需下载官方二进制；网络受限时配置当前命�
 
 .local/Test/ 中有 integration.log、build.log、package-win.log、dev-validation.json、desktop-validation.json、packaged-validation.json、native-result.json 及截图。测试故意触发非法 IPC，日志中的对应拒绝是预期；测试结果以断言/报告为准。构建可能提示 Zod 注释移除，未影响产物。
 
-截图文件：workspace.png、operation.png、tasks.png、workspace-small.png、workspace-125.png、workspace-150.png、terminal-fullscreen.png、terminal-loopback.png。
+截图文件：workspace.png、operation.png、tasks.png、welcome.png、host-form.png、workspace-small.png、workspace-125.png、workspace-150.png、terminal-fullscreen.png、terminal-loopback.png，以及 quick-open.png、host-form-error.png、task-failed.png、host-form-small.png、tasks-small.png、details-small.png。
 
 未执行：真实 VPS 与 Debian/Ubuntu/Alpine 实机诊断、实际 Agent/加密私钥提示流程、Windows 中文 IME 候选选择、真实 Linux vim/top、系统 DPI 设置切换/跨屏吸附、长时间运行与其他 Windows 版本。回环 ssh2 服务只返回合成结果；Unicode/ANSI/Chromium 缩放不是以上验证的替代品。未获授权的生产主机从未连接。
 

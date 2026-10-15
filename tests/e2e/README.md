@@ -10,7 +10,7 @@
 
 ## v0.1 状态
 
-desktop.mjs 用 Playwright 启动 Electron，--packaged 改测 release/win-unpacked/SuPilot.exe。native-worker.cjs 在实际 utilityProcess 加载应用自己的 node-pty/SQLite，检查 Unicode、尺寸和长粘贴。使用 SuPilot-test 配置；先完成 pnpm build 或 package:win。
+desktop.mjs 用 Playwright 启动 Electron，--packaged 改测 release/win-unpacked/SuPilot.exe。native-worker.cjs 在实际 utilityProcess 加载应用自己的 node-pty/SQLite，检查 Unicode、尺寸和长粘贴。使用 SuPilot-test 配置；先完成 pnpm build 或 package:win。界面回归覆盖快速打开/会话复用、未保存表单与错误焦点、任务筛选目标同步、窄窗口模态详情/任务选择、标签键盘导航，并继续检查实际回环 SSH 与原生模块。
 
 正式源码与说明由 SuPilot 独立仓库跟踪；生成产物和本机材料遵守项目忽略规则。
 
