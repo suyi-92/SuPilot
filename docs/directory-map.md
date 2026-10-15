@@ -75,7 +75,6 @@ Windows 通常不区分路径大小写，不要用根目录 `Docs` 与 `docs` �
 | --- | --- |
 | `README.md` | 产品入口、实际状态、目录与启动说明；不夸大已实现功能 |
 | `AGENTS.md` | 权威协作规则 |
-| `AGENT.md` | 兼容导航，只指向 AGENTS.md，不能分叉维护规则 |
 | `package.json` | 根包与真实可执行脚本，当前只有 local:init |
 | `pnpm-workspace.yaml` | 发现 apps/*、packages/*、plugins/* 下的包 |
 | `.gitignore` | 排除本地材料、依赖、产物和环境文件，不应掩盖正式测试样例 |

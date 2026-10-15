@@ -61,7 +61,6 @@ SuPilot/
 │  ├─ Test/                  本地测试驱动、结果与截图
 │  └─ Tmp/<任务名>/          一次性探针与中间材料
 ├─ AGENTS.md                 权威协作规则
-├─ AGENT.md                  指向 AGENTS.md 的兼容说明
 ├─ package.json              根工作区声明和已实现的脚本
 └─ pnpm-workspace.yaml       内部包发现规则
 ```
