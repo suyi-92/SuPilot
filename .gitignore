@@ -1,0 +1,40 @@
+# Personal workspace: drafts, local helpers, experiments, temporary files.
+/.local/
+
+# Dependencies and tool caches at any workspace depth.
+node_modules/
+.pnpm-store/
+.cache/
+.vite/
+.turbo/
+*.tsbuildinfo
+
+# Generated application bundles, installers, and test reports.
+out/
+dist/
+release/
+coverage/
+playwright-report/
+test-results/
+*.log
+
+# Machine-local environment; only sanitized examples may be committed.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.npmrc.local
+
+# Editor and OS state.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Do not broadly ignore *.db, *.pem or *.key: real secrets belong outside
+# this repository; synthetic test fixtures must remain visible for review.

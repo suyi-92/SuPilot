@@ -1,0 +1,25 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  apps/desktop: {}
+
+  packages/contracts: {}
+
+  packages/engine: {}
+
+  packages/plugin-sdk: {}
+
+  packages/ui: {}
+
+  plugins/access: {}
+
+  plugins/diagnostics: {}
+
+  plugins/surelay: {}

@@ -1,0 +1,14 @@
+{
+  "name": "supilot-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SuPilot: terminal-first VPS desktop control center (scaffold)",
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "local:init": "node scripts/init-local.mjs"
+  }
+}

@@ -1,0 +1,13 @@
+# 界面业务功能
+
+## 用途
+
+按 hosts、terminal、operations、tasks 划分用户功能。
+
+## 限制
+
+共享通用组件放 packages/ui；业务状态经 contracts 接收，不直接调用 Engine 实现。
+
+本目录中的正式源码、说明和配置应纳入 Git；目前为骨架，未提供实际业务实现。生成产物和本机材料遵守项目忽略规则。
+
+完整规则见 [AGENTS.md](../../../../../AGENTS.md)，目录索引见 [directory-map.md](../../../../../docs/directory-map.md)。
