@@ -1,0 +1,56 @@
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb177357e177661033c1b092f9c9d0e5f5a..50e109cce0d21e26a9d25806f63c1fe38aaa1a8d 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -136,6 +136,7 @@ var WindowsPtyAgent = /** @class */ (function () {
+         if (this._useConpty) {
+             if (!this._useConptyDll) {
+                 this._inSocket.readable = false;
++                this._inSocket.destroy();
+                 this._outSocket.readable = false;
+                 this._getConsoleProcessList().then(function (consoleProcessList) {
+                     consoleProcessList.forEach(function (pid) {
+@@ -241,8 +242,13 @@ var WindowsPtyAgent = /** @class */ (function () {
+             return;
+         }
+         this._inSocket.readable = false;
++        this._inSocket.destroy();
+         this._outSocket.readable = false;
+         this._outSocket.destroy();
++        // SuPilot: release the worker and pseudoconsole after natural process exit.
++        // Do not enumerate/kill process IDs after the shell has already exited.
++        this._conoutSocketWorker.dispose();
++        try { this._ptyNative.kill(this._pty, this._useConptyDll); } catch (e) { /* already released */ }
+     };
+     return WindowsPtyAgent;
+ }());
+diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d7054449516f0c9a62af351c2caa17331206d530..40f691271a4c4932d4f9a052199e663988e01124 100644
+--- a/src/windowsPtyAgent.ts
++++ b/src/windowsPtyAgent.ts
+@@ -143,6 +143,7 @@ export class WindowsPtyAgent {
+     if (this._useConpty) {
+       if (!this._useConptyDll) {
+         this._inSocket.readable = false;
++        this._inSocket.destroy();
+         this._outSocket.readable = false;
+         this._getConsoleProcessList().then(consoleProcessList => {
+           consoleProcessList.forEach((pid: number) => {
+@@ -244,8 +245,17 @@ export class WindowsPtyAgent {
+       return;
+     }
+     this._inSocket.readable = false;
++    this._inSocket.destroy();
+     this._outSocket.readable = false;
+     this._outSocket.destroy();
++    // SuPilot: release the worker and pseudoconsole after natural process exit.
++    // Do not enumerate/kill process IDs after the shell has already exited.
++    this._conoutSocketWorker.dispose();
++    try {
++      this._ptyNative.kill(this._pty, this._useConptyDll);
++    } catch {
++      // The native handle may already have been released.
++    }
+   }
+ }
+ 

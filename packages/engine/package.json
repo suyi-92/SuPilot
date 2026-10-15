@@ -2,5 +2,11 @@
   "name": "@supilot/engine",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@supilot/contracts": "workspace:*",
+    "@supilot/plugin-sdk": "workspace:*",
+    "node-pty": "1.1.0"
+  }
 }

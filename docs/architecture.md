@@ -1,99 +1,68 @@
-# 架构边界
+# v0.1 架构与边界
 
-本文描述后续实现的约束和方向，不代表组件已经实现。当前可运行内容见根 README。
+本文描述当前实现，待实现扩展单独标注。
 
-## 产品与部署单元
+## 进程与依赖
 
-SuPilot 是单个桌面应用，内部以 pnpm workspace 拆包。使用多进程隔离界面与执行，但不把内部模块拆成网络微服务。
+| 位置                  | 当前职责                                                             |
+| --------------------- | -------------------------------------------------------------------- |
+| Renderer              | React 工作区与 xterm，经 Preload 访问后台                            |
+| Preload               | sandbox 兼容 CJS 桥接：request、subscribe、attachTerminal、chooseKey |
+| Main                  | 原生窗口、单实例、配置隔离、文件选择、IPC 授权、Engine 与退出流程    |
+| Engine utilityProcess | SQLite、主机、OpenSSH、信任、PTY、任务、插件执行                     |
 
-- 本地应用：主机资产、SSH 会话、信任记录、任务、插件配置和用户界面。
-- 远程 VPS：现有 SSH 服务、按需执行的命令或任务包装器、用户安装的服务工具。
-- SuRelay：独立维护的 VPS 工具，由 `plugins/surelay` 适配，不是 SuPilot 的必需运行组件。
+Main 校验 sender、mainFrame、精确 Renderer URL 和 Zod 请求；Engine 再校验。拒绝弹窗、导航、webview 及非必要权限，剪贴板仅开放给受信任主窗口。MessagePort 只能绑定已存在会话一次，输入、尺寸和 ACK 有运行时校验。Renderer 无通用 IPC、文件读写或任意命令 API。
 
-## 进程职责
+依赖方向为 contracts → plugin-sdk / engine / ui / plugins → apps/desktop。contracts 平台中立，engine 不导入具体插件。应用 engine 入口仅装配 Diagnostics 和 Electron 传输，不维护第二套状态。
 
-| 位置 | 职责 | 不承担 |
-| --- | --- | --- |
-| Renderer | React 工作区、xterm.js、表单、任务与结果视图 | 文件系统、进程启动、秘密存取和数据库 |
-| Preload | 在隔离上下文中暴露受控接口，桥接消息 | 独立后台服务、通用 IPC 透传、业务执行 |
-| Main | 窗口、菜单、生命周期、系统凭据访问、IPC 授权与后台装配 | 长时间阻塞任务和高频终端状态管理 |
-| Engine utilityProcess | SSH/PTY、会话、任务调度、信任、存储、插件调用 | 窗口、React 状态、浏览器 DOM |
+## 主机与存储
 
-`apps/desktop/src/engine/` 是 Electron 进程入口和适配层；`packages/engine/` 是可独立理解的核心业务，两者不能分别维护一套状态。
+主机以 UUID 标识，保存名称、地址、公网端口、用户名、认证/私钥路径、分组、标签、备注。sshdPort 是记录的远端监听端口，与连接使用的 port 独立。
 
-## 依赖方向
+Engine 是会话和任务事实来源。Zustand 仅保存布局与字体等 UI 状态；React 接收低频快照。操作页、信任挑战、会话和任务均冻结目标，导航选择与档案编辑不改变已创建对象。删除档案保留会话、任务快照与信任。
 
-```text
-contracts                   可序列化 DTO、消息与运行时验证
-   ↑
-plugin-sdk                  插件契约与有限核心服务接口
-   ↑
-engine / plugins            实现核心服务 / 使用服务实现具体操作
-   ↑
-apps/desktop                装配、注册插件与启动进程
+SQLite 使用 Electron 内置 Node 的 node:sqlite（当前仍带实验性 API 提示），WAL、schema version 1。主机/任务为 JSON 行。查询最近 200 条任务，创建前清理旧记录；每项最多 128 KiB，四项约 512 KiB/任务。v0.1 的有界日志直接保存在任务 JSON 中，没有额外日志文件/索引服务。
 
-ui + contracts              提供组件与界面所需协议
-   ↑
-apps/desktop/renderer       组合工作区和业务页面
-```
+启动将未完成 running / cancel-requested 恢复为 unknown，不自动重跑。终端内容不落盘，会话不跨重启恢复。数据不加密，不保存密码/口令，私钥仅存路径引用。正式/开发/测试使用独立 userData，.local 不承担运行数据。
 
-- 核心不直接 import 具体插件，应用装配层负责选择插件并注册。
-- 插件不 import Engine 的内部实现，不直接访问数据库、系统凭据或其他会话。
-- 同一插件未来可以分别提供后台入口与界面入口；不能用单个入口把 Node 模块传入 Renderer。
-- TypeScript 类型不能代替运行时校验，Preload 之外仍要校验来源、消息、目标和操作权限。
+## 交互终端
 
-## 两种执行通道
+xterm → MessagePort → Engine Sessions → node-pty → ConPTY → 系统 OpenSSH。高频输出直接进入 xterm，绕过 React/Zustand。每 16 ms 最多发送 16K 字符，未确认量达到 128K 字符时暂停 PTY，xterm 完成写入后 ACK；待发送超过 1M 字符时结束本地会话。滚动历史 5000 行，最多 16 个活跃会话。
 
-| 类型 | 本地链路 | 生命周期与结果 |
-| --- | --- | --- |
-| 交互终端 | xterm.js → 受控数据通道 → node-pty / ConPTY → OpenSSH | 用户输入、PTY 输出、尺寸、退出状态 |
-| 自动化任务 | 任务引擎 → 独立 OpenSSH 标准输入输出通道 / 文件传输 | 结构化事件、远端结果、日志、重试边界 |
+ResizeObserver 和 xterm resize 同步尺寸，包含字号变化。标签切换仅隐藏，保持 xterm/端口挂载；关闭标签才释放。端口意外关闭时标记中断并释放 PTY。
 
-自动化不占用或模拟输入到用户当前终端。需要人工交互的快捷脚本可以显式打开一个新终端。
+初始 awaiting-auth。远端启动命令打印随机 UUID 的 OSC 握手，然后 exec 用户登录 Shell。UUID 只在认证后的 SSH exec 请求发送，预认证 banner 无从获知；增量解析器剥离标记，收到正确标记才 authenticated。不能以进程启动或普通“Authenticated”文本判断成功。
 
-`ssh -T` 只是不分配远程 PTY，不会自动解决密码输入、私钥口令、sudo 或断线恢复。认证交互、SFTP、跳板机、Agent 和使用系统/随包 OpenSSH 的策略必须通过技术验证后确定。
+因此 v0.1 需要目标提供 Linux sh 与可运行登录 Shell。后续用户输入直接发送；诊断不使用该 PTY。node-pty 的 Windows 自然退出资源修复通过 pnpm patch 管理，见 patches/README.md。
 
-终端流与低频业务消息分开设计，考虑背压、消息批量传输、缓冲区上限与释放。数据库不逐字符存储终端内容；日志留存要限制大小、脱敏并可清理。
+## SSH 与信任
 
-## 状态与持久化
+Windows 使用 System32/OpenSSH 的 ssh.exe、ssh-keyscan.exe，缺失时提示安装可选功能。专属 config/known_hosts；StrictHostKeyChecking=yes、UpdateHostKeys=no、GlobalKnownHostsFile=none，不读取用户默认 SSH 配置。关闭转发，连接超时 10 秒，启用 server alive。
 
-- Zustand：布局、面板、焦点和筛选等界面状态。
-- Engine：会话、任务、连接探测和资源锁的事实来源。
-- SQLite：主机档案、插件设置、任务元数据、日志索引及需要恢复的布局。驱动与迁移实现待定，数据库由 Engine 统一管理写入。
-- 日志文件：在应用数据目录按任务保存，数据库只记录需要索引的元数据。
-- 秘密：系统凭据保护、SSH Agent 或私钥文件引用；不将秘密普通文本写进数据库，不把秘密发送到 Renderer。
-- SSH 配置与信任：应用专属配置和 `known_hosts`，与用户系统配置的导入、引用、导出边界需明确，不能静默改写用户文件。
+扫描 ed25519/ecdsa/rsa 公钥并计算 SHA256。首次连接用户独立核对并确认，扫描本身不验证身份。挑战冻结目标，有一次性 token 与五分钟有效期；未信任不能执行。已知算法密钥变化或不再有匹配密钥时阻断，实际 OpenSSH 再核验 known_hosts，防止扫描后被替换。
 
-运行数据使用 `app.getPath('userData')` 派生路径，开发、测试与正式数据隔离。仓库 `.local/` 仅供开发材料使用，不承担正式应用数据存储。
+不提供指纹删除/重装恢复，不清空信任，不创建/删除用户登录密钥。
 
-## 主机身份与操作对象
+## 只读任务
 
-主机 ID 不等同于 IP。连接端点应支持域名、IPv4/IPv6、公网端口、跳板机、用户和认证引用；远端监听端口独立记录，以支持 NAT VPS。
+可信插件固定命令，Renderer 只指定插件 ID。每项独立非 PTY SSH、BatchMode=yes、公钥认证、忽略 stdin；最多 20 秒，stdout+stderr 合计 128 KiB。同机一任务，全局最多四任务，无排队或自动重试。
 
-登录私钥与服务器主机密钥不同。重装造成的指纹变化要通过明确重新登记流程处理，不能因重装删除登录私钥或全局放弃校验。
+| 状态             | 含义                                        |
+| ---------------- | ------------------------------------------- |
+| running          | 执行中                                      |
+| succeeded        | 检查完成；不可用项单独标 unavailable 并说明 |
+| failed           | 明确执行/认证/信任/连接建立/本地启动失败    |
+| interrupted      | SSH 意外中断，远端结果未确认                |
+| cancel-requested | 已请求本地取消，尚未确认结果                |
+| cancelled        | 尚未发出的检查取消                          |
+| unknown          | 超时、超限、执行中取消、崩溃导致结果未知    |
 
-表单与任务在创建时冻结目标 ID；批量任务保存当时解析后的目标清单，不能在执行中根据分组变化增减目标。
+步骤记录输出、退出码和状态；移除 ANSI CSI/NUL，以只读文本呈现。日志不含应用保存的密码，但系统信息可能包含运维元数据，不承诺通用自动脱敏。
 
-## 任务与访问保护
+## 生命周期、演示与后续
 
-任务至少需要表达排队、执行中、等待输入、成功、失败、取消请求、已取消和结果未知；最终状态机由实现时明确，不先伪造可用协议。
+活跃会话/任务退出时提示，确认后关闭 PTY、取消任务、等待 Engine，超时再结束后台。远端是否停止不可保证。Engine 崩溃提示重启并标记中断/未知。
 
-- SSH 断开不等于远端命令停止；本地取消请求也不等于远端取消成功。
-- 有副作用的任务不能在结果未知时直接重试。需要查询远端状态、使用操作标识或向用户明确说明恢复边界。
-- 任务引擎协调同机互斥与并发上限，单机失败结果独立保存。
-- 修改 SSH 或防火墙访问路径时，核心提供共同的访问保护机制，插件负责具体操作；保留旧路径，验证独立新连接后再收紧。
-- 自动回滚仅适用于有明确恢复契约的操作，不对所有脚本承诺事务或回滚。
+演示纯 Renderer 内存，14 台合成主机、模拟终端与任务，不调用连接/执行/主机写入 API。进入前须结束真实活跃操作，模拟窗格不标已连接。
 
-## 生命周期
-
-切换页面或隐藏窗格不会销毁后台 SSH 会话；关闭终端、关闭窗口、退出应用是不同操作，需要分别定义提示和清理行为。
-
-`utilityProcess` 随应用生命周期管理，不是应用退出后持续运行的守护程序。后台崩溃后不能把遗留任务标成成功；需要恢复已保存记录，并核查远端结果。
-
-## 尚需验证的选择
-
-1. Windows 上 OpenSSH 密码、口令、Agent、ProxyJump 与 SFTP 的一致体验。
-2. node-pty 与 Electron 的 ABI、ConPTY、输出背压和安装包行为。
-3. Engine 与 Renderer 间高频数据通道，以及 Engine 崩溃/退出时的会话清理。
-4. SQLite 驱动、凭据保护、代码签名和应用升级方案。
-5. SuRelay 的非交互、版本探测、结构化结果与访问保护对接。
+SFTP、跳板机 UI、批量调度、凭据保存、访问保护执行器、重装恢复、第三方插件和升级均未实现，不提前堆积空接口。

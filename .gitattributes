@@ -1,6 +1,8 @@
 * text=auto eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
+# Unified patches preserve meaningful spaces on otherwise blank context lines.
+patches/*.patch -whitespace
 *.png binary
 *.jpg binary
 *.jpeg binary

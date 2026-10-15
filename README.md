@@ -1,111 +1,93 @@
-# SuPilot
+# SuPilot v0.1
 
-**终端优先、本地优先、可通过插件扩展的 VPS 桌面控制中心。**
+**终端优先、本地优先的 Windows VPS 桌面工作区。**
 
-SuPilot 用于管理主机、SSH 终端、连接凭据和批量运维任务。SuRelay 是可选的服务插件；不安装 SuRelay 时，未来的 SuPilot 仍应提供完整的主机与终端功能。Pilot 取“领航、操控”的含义。
+已提供可运行的 Electron 应用：主机档案 → SSH 终端 → 标签与双窗格 → 独立只读诊断 → 持久任务记录。SuRelay 是可选扩展，无需安装即可使用全部 v0.1 功能。
 
-## 当前状态
+## 启动与构建
 
-本仓库目前是**项目骨架**，还没有可运行的 Electron 应用。
+日常使用可直接双击根目录的 [启动SuPilot.cmd](启动SuPilot.cmd)，启动 `release/win-unpacked/SuPilot.exe`。脚本按自身位置定位应用，不依赖当前工作目录；缺少产物时会提示构建命令，不会自动安装依赖或重新构建。
 
-- 已建立：独立本地 Git 仓库、pnpm workspace 声明、模块目录、目录说明、协作规则、本地工作区初始化脚本。
-- 尚未实现：窗口、SSH、终端、数据库、任务引擎、插件运行机制、打包与自动升级。
-- 各包的 `package.json` 仅声明名称和私有属性，未声明源码入口或应用依赖。
-- 尚未选定应用依赖的具体版本；已使用 pnpm 11.25.0 验证工作区并由工具生成空依赖的 `pnpm-lock.yaml`。后续增改依赖时同步更新锁文件，不能手工伪造。
-- 当前唯一可执行的项目脚本是 `local:init`。没有 `dev`、`build`、`test`、`package` 命令，也没有假装成功的占位命令。
-
-## 产品方向
-
-- Windows 优先，保留 macOS/Linux 的平台适配边界。
-- 左侧主机导航，中央终端与操作标签页，右侧详情和底部任务区按需展开。
-- 新 VPS 接入、重装后的身份重新登记、日常 SSH、脚本操作和批量任务统一管理。
-- 常用命令可以成为快捷操作；复杂部署通过功能插件提供表单、步骤和结果。
-- 初期插件由项目维护并随应用发布；插件接口本身不是安全沙箱。
-- 初期通过 SSH 工作，不要求 VPS 常驻管理 Agent，不依赖自建云端管理服务。
-
-## 技术方向
-
-下表是已讨论的选型方向，不代表依赖已经安装或兼容性已经验证。
-
-| 部分 | 方案 |
-| --- | --- |
-| 桌面与开发构建 | Electron、TypeScript、electron-vite |
-| 界面 | React、Tailwind CSS、shadcn/ui 的 Radix 组件方案 |
-| 布局与图标 | react-resizable-panels、Lucide React |
-| 界面状态 | Zustand；只保存界面状态，不替代后台会话和任务状态 |
-| 终端 | xterm.js、node-pty、Windows ConPTY |
-| SSH | OpenSSH；交互会话与自动化任务使用独立执行通道 |
-| 持久化 | SQLite；驱动、迁移工具和原生模块打包方案待技术验证 |
-| 工作区 | pnpm workspace；单个桌面应用和内部包 |
-
-## 目录总览
-
-```text
-SuPilot/
-├─ apps/desktop/             桌面应用、进程入口、界面与打包资源
-├─ packages/
-│  ├─ contracts/             跨进程协议与运行时校验
-│  ├─ engine/                主机、SSH、会话、任务、存储与插件注册
-│  ├─ ui/                    统一基础组件、主题和语义状态展示
-│  └─ plugin-sdk/            插件契约、执行上下文和辅助工具
-├─ plugins/
-│  ├─ diagnostics/           系统探测与诊断插件
-│  ├─ access/                SSH 接入与加固插件
-│  └─ surelay/               SuRelay 服务适配插件
-├─ docs/                     正式文档，纳入 Git
-├─ scripts/                  可移植的项目辅助脚本，纳入 Git
-├─ tests/                    正式跨模块测试和脱敏样例，纳入 Git
-├─ .local/                   仅本机使用，整体不纳入 Git
-│  ├─ Docs/                  草稿、讨论记录与个人参考
-│  ├─ Script/                长期保留的本机辅助工具
-│  ├─ Test/                  本地测试驱动、结果与截图
-│  └─ Tmp/<任务名>/          一次性探针与中间材料
-├─ AGENTS.md                 权威协作规则
-├─ package.json              根工作区声明和已实现的脚本
-└─ pnpm-workspace.yaml       内部包发现规则
-```
-
-各目录内的 `README.md` 说明本目录职责和限制；完整索引见 [目录与 Git 边界](docs/directory-map.md)。空目录通过说明文件保留，不创建没有含义的空白业务代码。
-
-## 本地初始化
-
-需要 Node.js 22 或更高版本，仅使用 Node.js 内置模块，无需先安装依赖：
+开发环境：Windows x64、Node.js 22.16+（推荐 24 LTS）、pnpm 11.25.0。连接需要 Windows 系统 OpenSSH 客户端。
 
 ```powershell
-node scripts/init-local.mjs
+pnpm install --frozen-lockfile
+pnpm dev
 ```
-
-也可以在已经配置好 pnpm 时使用：
 
 ```powershell
-pnpm local:init
+pnpm typecheck
+pnpm build
+pnpm package:win
+.\release\win-unpacked\SuPilot.exe
 ```
 
-脚本可重复运行，只创建缺失的 `.local/` 目录和说明文件，不清空、不覆盖已有材料，不访问 VPS，不修改系统 SSH 配置。
+产物是 **release/win-unpacked/** 整个目录。复制时保留全部文件，不能只复制 exe；无需另装 Node.js。当前为未签名目录应用，没有安装器、自动升级或应用内更新。
 
-这些命令仅初始化本地材料目录，不启动应用。具体开发环境、选型验证和实现阶段见 [开发说明](docs/development.md)。
+## 使用
 
-## Git 与数据边界
+1. “添加主机”：填写名称、地址、**公网连接端口**、用户名，选择 SSH Agent 或已有私钥。远端 sshd 监听端口只记录，不用于连接。
+2. 双击主机打开或切换会话；“新建会话”允许同机多个连接。首次连接显示 SHA256 指纹，需通过云控制台等独立渠道核对后确认。
+3. 左右/上下分屏每个标签最多两个窗格，蓝色边界表示输入焦点。切换标签或收起侧栏不会关闭会话。
+4. “系统诊断”绑定固定目标，通过独立 SSH 通道查询。任务记录显示步骤、输出和退出码，可复制日志。
+5. “演示模式”提供 14 台合成主机、两个模拟终端和不同任务状态。所有演示操作仅在内存中，不创建真实连接或任务。
 
-- 正式源码、文档、构建脚本、测试、脱敏样例以及锁文件应进入 Git；“应进入”不代表初始化时已经暂存或提交。
-- `.local/`、依赖、缓存、编译产物和安装包被忽略。Git 不备份这些内容，重要个人材料需要另行备份。
-- 应用运行数据放入 Electron `app.getPath('userData')` 对应目录；开发与正式应用使用分开的数据目录。
-- 登录密码、私钥、私钥口令、Cloudflare Token、真实主机清单和实际运行数据库不进入仓库。秘密由系统凭据保护或 SSH Agent 等机制管理。
-- 不按文件扩展名全局忽略所有数据库、证书或密钥样例；正式测试样例必须合成或脱敏并经检查，真实材料放在仓库之外。
+Ctrl+C / D / R 交给 Shell；Ctrl+Shift+C / V 复制粘贴。设置中分别调整界面字号、终端字号及 ANSI 配色。保留原生 Windows 标题栏、最大化和吸附行为。
 
-## 与 Server、SuRelay 的关系
+## 已实现
 
-SuPilot 是独立仓库，位于 Server 根目录，不属于 `infrastructure/SuRelay` 的源码目录。`plugins/surelay/` 只存适配代码，不复制 SuRelay 服务端项目，也不依赖开发机上的绝对兄弟目录。
+- SQLite 主机新增、编辑、删除、搜索、分组、标签、备注与稳定 UUID。
+- 操作、会话和任务创建时冻结连接参数；编辑档案不改变已有对象。
+- xterm → 专用 MessagePort → node-pty / ConPTY → 系统 OpenSSH，含背压、尺寸同步和释放。
+- 应用专属 SSH 配置与 known_hosts；首次信任确认、已知指纹变化阻断。
+- Diagnostics 内置插件：系统/内核、运行时间、磁盘、内存，每项独立 SSH 连接。
+- 同机任务互斥、有限并发、超时、输出限额、取消请求、失败/中断/未知状态及历史恢复。
+- 中文紧凑工作区、完整主机表单、操作/任务页、空状态、错误反馈、窄窗口及专注布局。
 
-项目远端为 `git@github.com:suyi-92/SuPilot.git`，交付分支为 `main`。在 Server 中以根目录 `SuPilot/` 子模块独立维护；独立克隆本仓库也可使用相同的目录和初始化流程。
+## 认证与能力边界
 
-子项目提交和推送，与父项目 `.gitmodules`、gitlink 的提交和推送分开处理。登记或更新父项目指针前，需确保目标提交已存在于子项目远端；登记子模块不等于授权提交 Server。实际登记与暂存状态以父仓库 Git 状态为准。
+优先使用系统 Agent 或现有私钥引用，不复制私钥、不保存密码/口令。交互终端由 OpenSSH 处理口令或密码提示。后台诊断只使用 BatchMode 公钥认证，需要可用 Agent 或可直接使用的密钥，不等待输入。
 
-## 文档入口
+启动 ssh.exe 不等于认证成功：收到认证后远端启动命令返回的随机握手标记才显示已连接。v0.1 交互目标需要 Linux 的 sh 和登录 Shell。诊断考虑 Debian/Ubuntu/Alpine 基本工具差异，但尚未在真实发行版验证。
 
-- [协作规则](AGENTS.md)：修改范围、架构约束、验证和交付。
-- [目录与 Git 边界](docs/directory-map.md)：所有目录的用途、限制和持久化位置。
-- [架构边界](docs/architecture.md)：进程、依赖方向、SSH 与任务生命周期。
-- [界面约定](docs/ui-guidelines.md)：工作区、主题、操作对象、终端与状态。
-- [插件约定](docs/plugin-contract.md)：插件分层、执行接口和 SuRelay 接入。
-- [开发说明](docs/development.md)：当前可运行的步骤、实施顺序和验收。
+关闭应用会提示活跃会话/任务并关闭本地 SSH，无法保证远端程序停止；未确认结果显示未知。应用不是常驻守护服务。
+
+不导入或改写系统 SSH 配置/known_hosts，不支持指纹重装重置、密码保存、跳板机 UI。Access / SuRelay 仅为明确标注的规划入口，无部署、加固、防火墙或卸载能力。批量调度、SFTP、云 API、第三方插件、云同步、自动升级与复杂监控均未实现。
+
+## 数据
+
+由 app.getPath('userData') 派生，Windows 通常为：
+
+| 模式           | 目录                                |
+| -------------- | ----------------------------------- |
+| 正式           | %APPDATA%/SuPilot                   |
+| 开发/未打包    | %APPDATA%/SuPilot-dev               |
+| SUPILOT_TEST=1 | %APPDATA%/SuPilot-test              |
+| 演示           | Renderer 内存，无真实主机数据库写入 |
+
+SQLite 为 supilot.sqlite（含 WAL），SSH 文件为 ssh/config、ssh/known_hosts。任务存储有限检查输出，可能含主机名称、挂载路径等运维信息；数据库不加密。密码/口令不入库，交互终端内容不持久化。UI 设置/面板尺寸使用当前配置的浏览器存储。
+
+## 验证
+
+```powershell
+pnpm test
+pnpm test:desktop
+node tests/e2e/desktop.mjs --packaged
+```
+
+集成测试覆盖协议、目标快照、恢复、超时/取消/输出限额、真实本机 OpenSSH/ConPTY、认证失败和指纹变化。桌面测试实际启动 Electron 和打包 exe，覆盖持久化、界面、原生模块、剪贴板及独立诊断。截图与报告保存在被忽略的 .local/Test/，详见 [开发与验证](docs/development.md)。
+
+**本机 SSH 测试返回合成数据，不能替代真实 VPS 验证。** 未执行真实 VPS、中文 IME 候选选择、真实 Linux vim/top、系统显示缩放切换；已验证 Unicode、ANSI 替代屏幕、900×650 窗口及 Chromium 125%/150% 缩放。
+
+## 项目与文档
+
+沿用 pnpm workspace：apps/desktop、packages/contracts、engine、ui、plugin-sdk 和 plugins/diagnostics。核心不 import 具体插件，由应用装配层注册。
+
+- [架构](docs/architecture.md)
+- [界面](docs/ui-guidelines.md)
+- [插件](docs/plugin-contract.md)
+- [开发验证](docs/development.md)
+- [目录与 Git 边界](docs/directory-map.md)
+- [协作规则](AGENTS.md)
+
+SuPilot 是独立仓库，远端 git@github.com:suyi-92/SuPilot.git。Server 只记录 gitlink；开发不等于授权提交、推送或修改父项目索引。真实数据在仓库外；依赖、产物与 .local 被忽略。pnpm local:init 仍可幂等创建本地材料目录。

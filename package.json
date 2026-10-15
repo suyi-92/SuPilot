@@ -1,14 +1,31 @@
 {
   "name": "supilot-workspace",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "SuPilot: terminal-first VPS desktop control center (scaffold)",
+  "description": "SuPilot: terminal-first VPS desktop workspace",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "local:init": "node scripts/init-local.mjs"
+    "local:init": "node scripts/init-local.mjs",
+    "dev": "pnpm --filter @supilot/desktop dev",
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm typecheck && pnpm --filter @supilot/desktop build",
+    "package:win": "pnpm build && pnpm --filter @supilot/desktop package:win",
+    "test": "tsx --test tests/integration/*.test.ts",
+    "test:desktop": "node tests/e2e/desktop.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/ssh2": "^1.15.6",
+    "playwright": "^1.56.0",
+    "prettier": "^3.9.10",
+    "ssh2": "^1.17.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
   }
 }

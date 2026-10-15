@@ -2,5 +2,9 @@
   "name": "@supilot/contracts",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "zod": "^4.1.12"
+  }
 }

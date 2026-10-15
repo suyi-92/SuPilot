@@ -2,3 +2,17 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'plugins/*'
+
+allowBuilds:
+  cpu-features: false
+  electron: true
+  electron-winstaller: false
+  esbuild: true
+  node-pty: true
+  ssh2: false
+
+minimumReleaseAgeExclude:
+  - electron-vite@6.0.0
+
+patchedDependencies:
+  node-pty@1.1.0: patches/node-pty@1.1.0.patch

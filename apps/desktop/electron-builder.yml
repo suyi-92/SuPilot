@@ -1,0 +1,17 @@
+appId: io.supilot.desktop
+productName: SuPilot
+electronDist: node_modules/electron/dist
+directories:
+  output: ../../release
+files:
+  - out/**/*
+  - package.json
+  - resources/icon.png
+asar: true
+asarUnpack:
+  - '**/node-pty/**'
+npmRebuild: false
+win:
+  executableName: SuPilot
+  icon: resources/icon.ico
+  signExecutable: false

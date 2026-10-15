@@ -1,6 +1,37 @@
 {
   "name": "@supilot/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "main": "out/main/index.js",
+  "description": "SuPilot SSH desktop workspace",
+  "author": "SuPilot",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "package:win": "electron-builder --win --x64 --dir"
+  },
+  "dependencies": {
+    "@supilot/contracts": "workspace:*",
+    "@supilot/engine": "workspace:*",
+    "@supilot/plugin-diagnostics": "workspace:*",
+    "@supilot/ui": "workspace:*",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "lucide-react": "^0.468.0",
+    "node-pty": "1.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-resizable-panels": "2.1.9",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "40.10.6",
+    "electron-builder": "26.15.3",
+    "electron-vite": "6.0.0",
+    "tailwindcss": "^4.1.18",
+    "vite": "6.4.4"
+  }
 }

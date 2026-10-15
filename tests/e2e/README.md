@@ -6,8 +6,12 @@
 
 ## 限制
 
-测试工具待选型；截图/录像/报告放忽略目录，合成基准如需提交应明确归属。
+使用 Playwright；截图/报告放忽略目录，样例仅使用合成数据。
 
-本目录中的正式源码、说明和配置应纳入 Git；目前为骨架，未提供实际业务实现。生成产物和本机材料遵守项目忽略规则。
+## v0.1 状态
+
+desktop.mjs 用 Playwright 启动 Electron，--packaged 改测 release/win-unpacked/SuPilot.exe。native-worker.cjs 在实际 utilityProcess 加载应用自己的 node-pty/SQLite，检查 Unicode、尺寸和长粘贴。使用 SuPilot-test 配置；先完成 pnpm build 或 package:win。
+
+正式源码与说明由 SuPilot 独立仓库跟踪；生成产物和本机材料遵守项目忽略规则。
 
 完整规则见 [AGENTS.md](../../AGENTS.md)，目录索引见 [directory-map.md](../../docs/directory-map.md)。
