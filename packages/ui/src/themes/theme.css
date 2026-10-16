@@ -2,22 +2,22 @@
   color-scheme: dark;
   --background: #1e1e1e;
   --surface: #252526;
-  --surface-raised: #2d2d2d;
+  --surface-raised: #2d2d30;
   --surface-hover: #2a2d2e;
-  --activity-background: #333333;
-  --title-background: #3c3c3c;
-  --input-background: #3c3c3c;
-  --input-border: #5a5a5a;
-  --foreground: #cccccc;
-  --muted-foreground: #b3b3b3;
-  --subtle-foreground: #9d9d9d;
+  --activity-background: #181818;
+  --title-background: #181818;
+  --input-background: #1f1f1f;
+  --input-border: #3f3f46;
+  --foreground: #d4d4d4;
+  --muted-foreground: #c2c2c2;
+  --subtle-foreground: #a5a5a5;
   --border: #454545;
-  --border-soft: #303031;
-  --accent: #007acc;
-  --accent-hover: #0062a3;
-  --link: #6cb6eb;
+  --border-soft: #2b2b2b;
+  --accent: #0078d4;
+  --accent-hover: #006bb6;
+  --link: #4fc1ff;
   --accent-foreground: #ffffff;
-  --accent-muted: #04395e;
+  --accent-muted: #094771;
   --selection-inactive: #37373d;
   --success: #89d185;
   --warning: #cca700;
@@ -25,7 +25,7 @@
   --success-background: #253025;
   --warning-background: #352e1b;
   --danger-background: #352422;
-  --demo-background: #68217a;
+  --demo-background: #6f3c86;
   --terminal-background: #1e1e1e;
   --ring: #007fd4;
   --ui-font-size: 13px;
@@ -102,6 +102,13 @@ svg {
 }
 .button-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+.button-primary:active:not(:disabled) {
+  background: var(--accent-hover);
+  filter: none;
+}
+.button-primary:focus-visible {
+  outline-color: var(--accent-foreground);
 }
 .button-danger {
   color: var(--danger);

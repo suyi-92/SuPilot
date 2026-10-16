@@ -124,6 +124,19 @@ export function App() {
           ? data.tasks.find((t) => t.id === current.taskId)?.target
           : data.hosts.find((h) => h.id === selectedHost)
   const selected = data.hosts.find((h) => h.id === selectedHost)
+  // The activity-rail diagnostic follows the list selection when present;
+  // terminal/detail actions continue to use their fixed tab target.
+  const activityTarget = selected || target
+  const targetContext =
+    current?.kind === 'terminal'
+      ? '当前会话目标'
+      : current?.kind === 'operation'
+        ? '当前操作目标'
+        : current?.kind === 'tasks'
+          ? '当前任务目标'
+          : current?.kind === 'host'
+            ? '当前表单目标'
+            : '列表选中主机'
   const activeCount = data.sessions.filter(activeSession).length
   const running = data.tasks.filter(activeTask).length
   const attention = data.tasks.filter((t) =>
@@ -559,9 +572,10 @@ export function App() {
               <Server size={24} />
             </IconButton>
             <IconButton
-              label="系统诊断"
+              label={`系统诊断 · ${selected ? '列表选中主机' : targetContext}：${activityTarget?.name || '尚未选择'}`}
               data-active={current?.kind === 'operation'}
-              onClick={() => openOperation(selected || target)}
+              data-target-id={activityTarget?.id}
+              onClick={() => openOperation(activityTarget)}
             >
               <Activity size={24} />
             </IconButton>
@@ -748,7 +762,8 @@ export function App() {
                       {selected ? (
                         <>
                           <div>
-                            <strong className="truncate">{selected.name}</strong>
+                            <span>列表选中主机</span>
+                            <strong className="truncate" title={selected.name}>{selected.name}</strong>
                             <span className="truncate" title={endpoint(selected)}>
                               {endpoint(selected)}
                             </span>
@@ -1014,46 +1029,80 @@ export function App() {
                   ))}
                   {!tabs.length && (
                     <div className="welcome">
-                      <h1>SuPilot</h1>
-                      <p className="welcome-subtitle">主机、终端与诊断，一个工作区。</p>
-                      <div className="welcome-columns">
-                        <section>
-                          <h2>开始</h2>
-                          <button className="welcome-link" onClick={() => openEditor()}>
-                            <Plus size={16} />
-                            添加主机…
-                          </button>
-                          <button className="welcome-link" onClick={() => toggleDemo()}>
-                            <FlaskConical size={16} />
-                            {demo ? '退出演示模式' : '探索演示工作区'}
-                          </button>
-                          <button className="welcome-link" onClick={() => setSettings(true)}>
-                            <Settings2 size={16} />
-                            界面与终端设置
-                          </button>
-                          <p className="welcome-note">
-                            主机数据保存在本机。
-                            <br />
-                            启动时会读取本机 ~/.ssh/config。
-                            <br />
-                            连接使用系统 OpenSSH。
-                          </p>
-                        </section>
-                        <section className="welcome-guide">
-                          <h2>工作流程</h2>
-                          <p>
-                            <strong>1. 添加连接</strong>
-                            <span>保存地址、用户与密钥引用。</span>
-                          </p>
-                          <p>
-                            <strong>2. 打开终端</strong>
-                            <span>双击主机，核对指纹后连接。</span>
-                          </p>
-                          <p>
-                            <strong>3. 运行诊断</strong>
-                            <span>独立执行只读检查，查看任务记录。</span>
-                          </p>
-                        </section>
+                      <div className="welcome-inner">
+                        <div className="welcome-eyebrow">
+                          <Compass size={14} aria-hidden="true" />
+                          <span>本地工作区</span>
+                          <span className="welcome-divider">/</span>
+                          <span>终端优先的主机工作台</span>
+                        </div>
+                        <div className="welcome-heading">
+                          <div className="welcome-mark" aria-hidden="true">
+                            <TerminalSquare size={26} />
+                          </div>
+                          <div>
+                            <h1>开始使用 SuPilot</h1>
+                            <p className="welcome-subtitle">连接主机，打开终端，在同一个工作区完成诊断。</p>
+                          </div>
+                        </div>
+                        <div className="welcome-columns">
+                          <section className="welcome-start">
+                            <div className="welcome-section-heading">
+                              <span className="welcome-section-index">01</span>
+                              <h2>打开工作区</h2>
+                            </div>
+                            <button className="welcome-link" onClick={() => openEditor()}>
+                              <Plus size={16} />
+                              <span>
+                                <strong>添加主机</strong>
+                                <small>保存连接地址与认证引用</small>
+                              </span>
+                              <ArrowRight size={14} />
+                            </button>
+                            <button className="welcome-link" onClick={() => toggleDemo()}>
+                              <FlaskConical size={16} />
+                              <span>
+                                <strong>探索演示工作区</strong>
+                                <small>查看多主机、分屏与任务记录</small>
+                              </span>
+                              <ArrowRight size={14} />
+                            </button>
+                            <button className="welcome-link" onClick={() => setSettings(true)}>
+                              <Settings2 size={16} />
+                              <span>
+                                <strong>调整界面与终端</strong>
+                                <small>字号、ANSI 配色与快捷键</small>
+                              </span>
+                              <ArrowRight size={14} />
+                            </button>
+                            <p className="welcome-note">
+                              主机数据保存在本机。启动时会读取 <code>~/.ssh/config</code>，连接使用系统 OpenSSH。
+                            </p>
+                          </section>
+                          <section className="welcome-guide">
+                            <div className="welcome-section-heading">
+                              <span className="welcome-section-index">02</span>
+                              <h2>日常操作</h2>
+                            </div>
+                            <div className="welcome-step">
+                              <span>1</span>
+                              <p><strong>添加连接</strong><small>主机、端口、用户和密钥引用会固定到档案。</small></p>
+                            </div>
+                            <div className="welcome-step">
+                              <span>2</span>
+                              <p><strong>打开终端</strong><small>双击主机，核对指纹后建立真实 SSH 会话。</small></p>
+                            </div>
+                            <div className="welcome-step">
+                              <span>3</span>
+                              <p><strong>运行诊断</strong><small>独立执行只读检查，结果会保存到任务记录。</small></p>
+                            </div>
+                          </section>
+                        </div>
+                        <div className="welcome-footer-note">
+                          <ShieldCheck size={14} />
+                          <span>不会修改系统 SSH 配置或用户私钥。</span>
+                          <span className="welcome-shortcut"><Keyboard size={13} /> Ctrl+K 快速打开</span>
+                        </div>
                       </div>
                       {loading ? (
                         <p className="muted">
@@ -1141,7 +1190,7 @@ export function App() {
               </header>
               {target ? (
                 <>
-                  <h3 className="explorer-heading">连接目标</h3>
+                  <h3 className="explorer-heading">{targetContext}</h3>
                   <div className="detail-identity">
                     <h3>{target.name}</h3>
                     <code>{endpoint(target)}</code>
@@ -1223,7 +1272,13 @@ export function App() {
                       新建 SSH 会话
                       <Plus size={13} />
                     </button>
-                    <button className="detail-action" onClick={() => openOperation(target)}>
+                    <button
+                      className="detail-action"
+                      aria-label={`系统诊断 · ${targetContext}：${target.name}`}
+                      title={`在“${target.name}”上运行系统诊断`}
+                      data-target-id={target.id}
+                      onClick={() => openOperation(target)}
+                    >
                       <Activity size={16} />
                       系统诊断
                       <ChevronRight size={13} />
@@ -1270,7 +1325,7 @@ export function App() {
                   )}
                   <div className="detail-footnote">
                     <Info size={13} />
-                    详情跟随当前工作标签的固定目标
+                    {current ? '详情跟随当前工作标签的固定目标' : '详情显示列表选中的主机档案'}
                   </div>
                 </>
               ) : (

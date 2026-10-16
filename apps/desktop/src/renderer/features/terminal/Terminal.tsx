@@ -6,6 +6,7 @@ import { IconButton, Status } from '@supilot/ui'
 import { Copy, Clipboard, TerminalSquare, X, Check } from 'lucide-react'
 import { useUI } from '../../app/state'
 import { demoTerminal } from '../../app/demo'
+import { endpoint } from '../../app/format'
 import '@xterm/xterm/css/xterm.css'
 
 const graphite: ITheme = {
@@ -208,11 +209,12 @@ export function TerminalPane({
           type="button"
           onClick={() => terminal.current?.focus()}
           className="pane-identity"
+          aria-label={`终端会话目标：${session.target.name} · ${session.target.username}@${session.target.address}:${session.target.port}`}
           title={`${session.target.name} · ${session.target.username}@${session.target.address}:${session.target.port}`}
         >
           <TerminalSquare size={14} />
           <span className="truncate">{session.target.name}</span>
-          <span className="pane-user">@{session.target.username}</span>
+          <span className="pane-user">{endpoint(session.target)}</span>
         </button>
         <div className="pane-actions">
           {session.demo ? (

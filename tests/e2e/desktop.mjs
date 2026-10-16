@@ -4,11 +4,12 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { createSSHFixture } from '../fixtures/ssh-server.mjs'
+import { checkWelcome, checkPrimary, checkWorkbench, checkTerminalFocus } from './ui-regression.mjs'
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
-const output = join(root, '.local/Test')
-await mkdir(output, { recursive: true })
 const packaged = process.argv.includes('--packaged')
+const output = join(root, '.local/Test/ui-round1', `${packaged ? 'packaged' : 'desktop'}-${Date.now()}`)
+await mkdir(output, { recursive: true })
 const executablePath = packaged
   ? join(root, 'release/win-unpacked/SuPilot.exe')
   : require(join(root, 'apps/desktop/node_modules/electron'))
@@ -20,7 +21,7 @@ const options = {
   env: testEnv,
   timeout: 30000
 }
-const report = { packaged, checks: [], errors: [] }
+const report = { packaged, output, checks: [], errors: [], ui: {} }
 let app
 let fixture
 let loopId
@@ -63,6 +64,7 @@ try {
   await page.getByLabel('终端 ANSI 配色').selectOption('dark-plus')
   await page.getByRole('button', { name: '完成', exact: true }).click()
   await page.screenshot({ path: join(output, 'welcome.png') })
+  await checkWelcome({ page, app, output, report, root })
   const initial = await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))
   assert.match(initial.dataPath, /SuPilot-test$/)
   assert.equal(initial.engineError, undefined)
@@ -104,6 +106,7 @@ try {
   )
   const name = `本地持久化验证-${Date.now()}`
   await page.getByRole('button', { name: '添加主机', exact: true }).first().click()
+  await checkPrimary({ page, app, output, report })
   assert.equal(
     await page.getByRole('button', { name: '保存主机', exact: true }).evaluate((el) => {
       const box = el.getBoundingClientRect()
@@ -201,7 +204,7 @@ try {
   assert.equal(before.sessions.length, 0)
   await page.getByRole('button', { name: '上下分屏', exact: true }).click()
   await page.getByRole('button', { name: '左右分屏', exact: true }).click()
-  await page.getByRole('button', { name: '系统诊断', exact: true }).first().click()
+  await page.getByRole('button', { name: /^系统诊断 · 列表选中主机/ }).click()
   await page.getByRole('heading', { name: '系统诊断', exact: true }).waitFor()
   await page.screenshot({ path: join(output, 'operation.png') })
   await page.getByRole('button', { name: '运行演示诊断', exact: true }).click()
@@ -246,6 +249,7 @@ try {
   report.checks.push(
     'Quick-open search and Enter reuse, Escape dismissal; sidebar tag filtering; selection preserves active target; open-session navigator restores its tab; task rows use aligned columns'
   )
+  await checkWorkbench({ page, app, output, report })
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 650))
   await page.waitForTimeout(250) // Allow ResizeObserver, xterm fit and font metrics to settle.
   assert.equal(await page.locator('.details-sidebar').isVisible(), false)
@@ -384,6 +388,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('.xterm-rows')?.textContent.includes('LOOPBACK SSH FIXTURE')
   )
+  await checkTerminalFocus({ page, app, output, report })
   const terminal = page.locator('.xterm-helper-textarea').first()
   await terminal.focus()
   await page.keyboard.insertText('中文端到端输入')
@@ -420,7 +425,7 @@ try {
   }
   assert.ok(fixture.state.input.includes('leave-screen'))
   const previousInput = fixture.state.input
-  await page.getByRole('button', { name: '系统诊断', exact: true }).first().click()
+  await page.getByRole('button', { name: /^系统诊断 · 列表选中主机/ }).click()
   await page.getByRole('button', { name: '开始只读诊断', exact: true }).click()
   await waitSnapshot(page, (snapshot) =>
     snapshot.tasks.some((t) => t.target.id === loopHost.id && t.state === 'succeeded')
@@ -437,7 +442,7 @@ try {
     document.querySelector('.xterm-rows')?.textContent.includes('OUTPUT_END')
   )
   await page.screenshot({ path: join(output, 'terminal-loopback.png') })
-  assert.equal(fixture.state.shells, 1)
+  assert.equal(fixture.state.shells, 2, 'The focus regression opened and closed one additional real pane')
   assert.ok(fixture.state.dimensions.length > 1)
   report.checks.push(
     'Full xterm → MessagePort → Engine → ConPTY → system OpenSSH loopback path; fingerprint dialog, authentication marker, Chinese input, Ctrl+C/D/R, alternate screen, >200 KiB output with backpressure, tab persistence and four independent diagnostic channels'
@@ -457,6 +462,7 @@ try {
   assert.deepEqual(report.errors, [])
 } catch (error) {
   report.failure = error.stack
+  await app?.windows()[0]?.screenshot({ path: join(output, 'failure.png') }).catch(() => {})
   throw error
 } finally {
   await writeFile(

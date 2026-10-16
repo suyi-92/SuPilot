@@ -59,7 +59,7 @@ export function Operations({
         <div className="target-strip">
           <TerminalSquare size={20} />
           <div>
-            <span className="overline">检查目标</span>
+            <span className="overline">固定检查目标 · 不随列表选择变化</span>
             <strong>{host?.name || '尚未选择主机'}</strong>
           </div>
           <div className="target-endpoint">
