@@ -3,8 +3,12 @@ import { z } from 'zod'
 export const HostInput = z
   .object({
     id: z.string().uuid().optional(),
-    // Automatically maintained loopback profile for the current machine.
+    // Legacy automatically maintained loopback profile; new discovery uses source below.
     local: z.boolean().optional(),
+    // Metadata set by Engine when a profile was discovered in ~/.ssh/config.
+    source: z.enum(['ssh-config']).optional(),
+    sshConfigAlias: z.string().trim().min(1).max(255).optional(),
+    sshConfigFingerprint: z.string().max(2048).optional(),
     name: z.string().trim().min(1).max(100),
     address: z
       .string()

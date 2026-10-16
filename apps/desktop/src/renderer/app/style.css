@@ -1530,6 +1530,9 @@ input[type='range'] {
 .host-row .host-state.local {
   color: var(--link);
 }
+.host-row .host-state.config {
+  color: var(--text-muted);
+}
 .welcome-tab {
   display: flex;
   align-items: center;

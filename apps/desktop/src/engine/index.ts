@@ -3,8 +3,10 @@ import { diagnostics } from '@supilot/plugin-diagnostics'
 
 // Electron utilityProcess transport is the only platform concern in this entrypoint.
 const parent = process.parentPort!
-const engine = new Engine(process.argv[2], (snapshot) =>
-  parent.postMessage({ type: 'snapshot', snapshot })
+const engine = new Engine(
+  process.argv[2],
+  (snapshot) => parent.postMessage({ type: 'snapshot', snapshot }),
+  { sshConfigPath: process.env.SUPILOT_TEST === '1' ? null : undefined }
 )
 engine.register(diagnostics)
 parent.on('message', async (event) => {

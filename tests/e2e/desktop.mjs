@@ -66,10 +66,11 @@ try {
   const initial = await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))
   assert.match(initial.dataPath, /SuPilot-test$/)
   assert.equal(initial.engineError, undefined)
-  const localHost = initial.hosts.find((host) => host.local)
-  assert.ok(localHost, 'Local host profile is discovered on first launch')
-  assert.equal(localHost.address, '127.0.0.1')
-  assert.equal(initial.sessions.length, 0, 'Local discovery does not open a session')
+  assert.equal(
+    initial.hosts.some((host) => host.source === 'ssh-config'),
+    false
+  )
+  assert.equal(initial.sessions.length, 0, 'Startup discovery does not open a session')
   report.checks.push(
     'Engine utilityProcess starts; test profile is isolated; SQLite snapshot loads'
   )

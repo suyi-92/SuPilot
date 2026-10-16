@@ -155,7 +155,11 @@ export function App() {
   }, [])
   useEffect(() => {
     if (!demo && !selectedHost && real.hosts.length) {
-      setSelectedHost(real.hosts.find((host) => host.local)?.id || real.hosts[0].id)
+      setSelectedHost(
+        real.hosts.find((host) => host.source === 'ssh-config')?.id ||
+          real.hosts.find((host) => host.local)?.id ||
+          real.hosts[0].id
+      )
     }
   }, [demo, real.hosts, selectedHost])
   useEffect(() => {
@@ -466,6 +470,10 @@ export function App() {
       report('本机档案由应用自动维护，不能删除；可以编辑连接参数。')
       return
     }
+    if (host.source === 'ssh-config') {
+      report('该档案来自本机 SSH 配置，请从 ~/.ssh/config 移除对应 Host。')
+      return
+    }
     setConfirm({
       title: '删除主机档案',
       text: `删除“${host.name}”的档案。已有终端与历史任务保留原快照；应用专属主机信任记录保留。`,
@@ -702,9 +710,17 @@ export function App() {
                                         </small>
                                       )}
                                     </span>
-                                    {(h.local || live) && (
-                                      <span className={`host-state ${h.local ? 'local' : ''}`}>
-                                        {h.local ? '本机' : demo ? '模拟' : '会话'}
+                                    {(h.local || h.source === 'ssh-config' || live) && (
+                                      <span
+                                        className={`host-state ${h.local ? 'local' : h.source === 'ssh-config' ? 'config' : ''}`}
+                                      >
+                                        {h.local
+                                          ? '本机'
+                                          : h.source === 'ssh-config'
+                                            ? '配置'
+                                            : demo
+                                              ? '模拟'
+                                              : '会话'}
                                       </span>
                                     )}
                                   </button>
@@ -746,8 +762,12 @@ export function App() {
                               <Edit3 size={15} />
                             </IconButton>
                             <IconButton
-                              label={selected.local ? '本机档案不可删除' : '删除选中主机'}
-                              disabled={selected.local}
+                              label={
+                                selected.local || selected.source === 'ssh-config'
+                                  ? '本机 SSH 配置档案不可删除'
+                                  : '删除选中主机'
+                              }
+                              disabled={selected.local || selected.source === 'ssh-config'}
                               onClick={() => deleteHost(selected)}
                             >
                               <Trash2 size={15} />
@@ -1014,7 +1034,9 @@ export function App() {
                           <p className="welcome-note">
                             主机数据保存在本机。
                             <br />
-                            连接使用系统 OpenSSH，无需远端 Agent。
+                            启动时会读取本机 ~/.ssh/config。
+                            <br />
+                            连接使用系统 OpenSSH。
                           </p>
                         </section>
                         <section className="welcome-guide">
@@ -1130,6 +1152,8 @@ export function App() {
                         ) : (
                           <Status state={currentSession.state} />
                         )
+                      ) : target.source === 'ssh-config' ? (
+                        '来自本机 SSH 配置'
                       ) : target.local ? (
                         '本机档案 · 不会自动连接'
                       ) : (

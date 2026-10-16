@@ -1,7 +1,9 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Host } from '@supilot/contracts'
+import { discoverSshConfig, type SshConfigHost } from './config'
 
 export type ExecResult = {
   code: number
@@ -69,8 +71,9 @@ export class OpenSSH {
   readonly directory: string
   readonly config: string
   readonly knownHosts: string
+  readonly userConfig: string | null
   readonly available: boolean
-  constructor(data: string) {
+  constructor(data: string, userConfigPath?: string | null) {
     const winDirectory = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH')
     this.executable = process.platform === 'win32' ? join(winDirectory, 'ssh.exe') : 'ssh'
     this.keyscan =
@@ -79,6 +82,8 @@ export class OpenSSH {
     mkdirSync(this.directory, { recursive: true })
     this.config = join(this.directory, 'config')
     this.knownHosts = join(this.directory, 'known_hosts')
+    this.userConfig =
+      userConfigPath === null ? null : userConfigPath || join(homedir(), '.ssh', 'config')
     if (!existsSync(this.config))
       writeFileSync(
         this.config,
@@ -95,13 +100,20 @@ export class OpenSSH {
         '找不到系统 OpenSSH。请在 Windows 设置 → 可选功能中安装 OpenSSH 客户端，然后重启 SuPilot。'
       )
   }
+  discoverUserConfig(): SshConfigHost[] {
+    return this.userConfig ? discoverSshConfig(this.userConfig) : []
+  }
+  destination(host: Host) {
+    return host.source === 'ssh-config' && host.sshConfigAlias ? host.sshConfigAlias : host.address
+  }
   args(host: Host, batch = false): string[] {
     this.require()
     if (host.auth === 'key' && !existsSync(host.keyPath))
       throw new Error('私钥文件不存在，请编辑主机并选择现有私钥；应用不会创建或替换登录私钥。')
+    const fromUserConfig = host.source === 'ssh-config' && host.sshConfigAlias && this.userConfig
     const args = [
       '-F',
-      this.config,
+      fromUserConfig ? this.userConfig : this.config,
       '-o',
       `UserKnownHostsFile="${this.knownHosts.replace(/\\/g, '/')}"`,
       '-o',
@@ -122,6 +134,7 @@ export class OpenSSH {
       'ForwardAgent=no',
       '-o',
       'ClearAllForwardings=yes',
+      ...(fromUserConfig ? ['-o', `HostName=${host.address}`] : []),
       '-p',
       String(host.port),
       '-l',
@@ -143,7 +156,7 @@ export class OpenSSH {
   execute(host: Host, command: string, signal: AbortSignal) {
     return runProcess(
       this.executable,
-      [...this.args(host, true), host.address, command],
+      [...this.args(host, true), this.destination(host), command],
       20000,
       signal
     )

@@ -17,7 +17,7 @@ Main 校验 sender、mainFrame、精确 Renderer URL 和 Zod 请求；Engine 再
 
 ## 主机与存储
 
-主机以 UUID 标识，保存名称、地址、公网端口、用户名、认证/私钥路径、分组、标签、备注。`local` 档案由 Engine 首次启动时根据当前计算机名和用户名自动创建，固定指向 `127.0.0.1`，仅作为明确的本机 SSH 入口，不会自动连接；sshdPort 是记录的远端监听端口，与连接使用的 port 独立。本机档案不能删除，避免每次启动重复出现。
+主机以 UUID 标识，保存名称、地址、公网端口、用户名、认证/私钥路径、分组、标签、备注。Engine 启动时只读解析当前用户 `~/.ssh/config`，将具体 `Host` 别名及 `HostName`、`Port`、`User`、`IdentityFile`、`Include` 导入为 `source=ssh-config` 档案；不会写回用户配置。导入档案的目标仍会冻结到会话/任务快照，档案本身不能在 SuPilot 中删除，应从 SSH 配置中移除对应 Host。sshdPort 是记录的远端监听端口，与连接使用的 port 独立。
 
 Engine 是会话和任务事实来源。Zustand 仅保存布局与字体等 UI 状态；React 接收低频快照。操作页、信任挑战、会话和任务均冻结目标，导航选择与档案编辑不改变已创建对象。删除档案保留会话、任务快照与信任。
 
@@ -37,7 +37,7 @@ ResizeObserver 和 xterm resize 同步尺寸，包含字号变化。标签切换
 
 ## SSH 与信任
 
-Windows 使用 System32/OpenSSH 的 ssh.exe、ssh-keyscan.exe，缺失时提示安装可选功能。专属 config/known_hosts；StrictHostKeyChecking=yes、UpdateHostKeys=no、GlobalKnownHostsFile=none，不读取用户默认 SSH 配置。关闭转发，连接超时 10 秒，启用 server alive。
+Windows 使用 System32/OpenSSH 的 ssh.exe、ssh-keyscan.exe，缺失时提示安装可选功能。普通档案使用专属 config/known_hosts；从用户配置导入的档案只为保留 Host 别名和 ProxyCommand 等连接能力而读取原 `~/.ssh/config`，同时用应用专属 known_hosts 覆盖信任文件。所有连接保持 StrictHostKeyChecking=yes、UpdateHostKeys=no、GlobalKnownHostsFile=none，关闭转发，连接超时 10 秒，启用 server alive。
 
 扫描 ed25519/ecdsa/rsa 公钥并计算 SHA256。首次连接用户独立核对并确认，扫描本身不验证身份。挑战冻结目标，有一次性 token 与五分钟有效期；未信任不能执行。已知算法密钥变化或不再有匹配密钥时阻断，实际 OpenSSH 再核验 known_hosts，防止扫描后被替换。
 

@@ -10,7 +10,7 @@
 
 ## v0.1 状态
 
-系统 OpenSSH 检测、参数数组、应用 SSH 配置、独立 BatchMode 执行、超时/取消/128 KiB 输出限制已实现。无随包 SSH、跳板机 UI 或文件传输。
+系统 OpenSSH 检测、参数数组、应用 SSH 配置、用户 `~/.ssh/config` 的只读 Host/Include 导入、独立 BatchMode 执行、超时/取消/128 KiB 输出限制已实现。无随包 SSH、跳板机 UI 或文件传输。
 
 正式源码与说明由 SuPilot 独立仓库跟踪；生成产物和本机材料遵守项目忽略规则。
 

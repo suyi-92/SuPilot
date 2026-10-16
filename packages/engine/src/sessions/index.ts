@@ -63,7 +63,7 @@ export class Sessions {
     const command = `sh -c 'printf "\\033]777;supilot-session:${id}\\007"; exec "${'${SHELL:-/bin/sh}'}" -l'`
     const proc = pty.spawn(
       this.ssh.executable,
-      [...this.ssh.args(target), '-tt', target.address, command],
+      [...this.ssh.args(target), '-tt', this.ssh.destination(target), command],
       {
         name: 'xterm-256color',
         cols: 100,

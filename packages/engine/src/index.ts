@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { hostname, userInfo } from 'node:os'
 import { Request, type Host, type Snapshot } from '@supilot/contracts'
 import type { DiagnosticPlugin } from '@supilot/plugin-sdk'
 import { Store } from './storage'
@@ -9,6 +8,11 @@ import { Sessions } from './sessions'
 import { Tasks } from './tasks'
 export { Sessions } from './sessions'
 export { OpenSSH } from './ssh'
+
+export type EngineOptions = {
+  /** Pass null in isolated tests so the user's real SSH inventory is never read. */
+  sshConfigPath?: string | null
+}
 
 export class Engine {
   readonly store: Store
@@ -20,39 +24,115 @@ export class Engine {
   private closing = false
   constructor(
     readonly dataPath: string,
-    private publish: (snapshot: Snapshot) => void
+    private publish: (snapshot: Snapshot) => void,
+    options: EngineOptions = {}
   ) {
     this.store = new Store(dataPath)
-    this.ensureLocalHost()
-    this.ssh = new OpenSSH(dataPath)
+    this.ssh = new OpenSSH(dataPath, options.sshConfigPath)
+    this.removeLegacyLocalProfile()
+    this.importUserSshConfig()
     this.trust = new Trust(this.ssh)
     this.sessions = new Sessions(this.ssh, () => this.changed())
     this.tasks = new Tasks(this.store, this.ssh, () => this.changed())
   }
-  private ensureLocalHost() {
-    if (this.store.hosts().some((host) => host.local)) return
-    const username =
-      (userInfo().username || process.env.USERNAME || 'user')
-        .replace(/[^a-zA-Z0-9_.@-]/g, '-')
-        .replace(/^[^a-zA-Z0-9_]/, 'user-')
-        .slice(0, 64) || 'user'
-    const machine = hostname().trim() || 'localhost'
-    this.store.saveHost({
-      id: randomUUID(),
-      local: true,
-      name: `本机 · ${machine}`,
-      address: '127.0.0.1',
-      port: 22,
-      sshdPort: 22,
+  private removeLegacyLocalProfile() {
+    for (const host of this.store.hosts()) {
+      if (
+        host.local &&
+        !host.source &&
+        host.address === '127.0.0.1' &&
+        host.port === 22 &&
+        host.username &&
+        host.auth === 'agent' &&
+        host.group === '本机' &&
+        host.tags.length === 1 &&
+        host.tags[0] === 'localhost' &&
+        host.notes.startsWith('由 SuPilot 自动识别的本机档案。')
+      )
+        this.store.deleteHost(host.id)
+    }
+  }
+  private importUserSshConfig() {
+    const discovered = this.ssh.discoverUserConfig()
+    const existing = this.store.hosts()
+    const aliases = new Set(discovered.map((config) => config.alias.toLowerCase()))
+    for (const config of discovered) {
+      const fingerprint = [
+        config.hostname,
+        config.port,
+        config.username,
+        config.identityFile,
+        config.proxyCommand || ''
+      ].join('\0')
+      const previous = existing.find(
+        (host) =>
+          host.source === 'ssh-config' &&
+          host.sshConfigAlias?.toLowerCase() === config.alias.toLowerCase()
+      )
+      if (previous && !previous.sshConfigFingerprint) continue
+      if (previous && previous.sshConfigFingerprint === fingerprint) continue
+      if (previous) {
+        const refreshed = this.importedHost(config, previous.id, fingerprint)
+        if (!refreshed) continue
+        this.store.saveHost(refreshed)
+        existing.splice(existing.indexOf(previous), 1, refreshed)
+        continue
+      }
+      const host = this.importedHost(config, randomUUID(), fingerprint)
+      if (!host) continue
+      this.store.saveHost(host)
+      existing.push(host)
+    }
+    for (const host of existing) {
+      if (
+        host.source === 'ssh-config' &&
+        host.sshConfigFingerprint &&
+        !aliases.has(host.sshConfigAlias?.toLowerCase() || '')
+      )
+        this.store.deleteHost(host.id)
+    }
+  }
+  private importedHost(
+    config: ReturnType<typeof this.ssh.discoverUserConfig>[number],
+    id: string,
+    fingerprint: string
+  ): Host | undefined {
+    const username = config.username
+      .replace(/[^a-zA-Z0-9_.@-]/g, '-')
+      .replace(/^[^a-zA-Z0-9_]/, 'user-')
+      .slice(0, 64)
+    const address = config.hostname.replace(/^\[|\]$/g, '')
+    if (
+      !username ||
+      !address ||
+      config.alias.length > 100 ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9.:_%\-]*$|^::[a-fA-F0-9:]+$/.test(address)
+    )
+      return
+    return {
+      id,
+      name: config.alias,
+      address,
+      port: config.port,
+      sshdPort: config.port,
       username,
-      auth: 'agent',
-      keyPath: '',
-      group: '本机',
-      tags: ['localhost'],
-      notes:
-        '由 SuPilot 自动识别的本机档案。不会自动连接；需要 Windows OpenSSH Server 才能通过 SSH 打开。',
+      auth: config.identityFile ? 'key' : 'agent',
+      keyPath: config.identityFile,
+      group: 'SSH 配置',
+      tags: ['ssh-config'],
+      notes: [
+        `从 ${config.configPath} 自动读取。编辑并保存后，SuPilot 使用当前档案快照。`,
+        config.proxyCommand
+          ? '该 Host 含 ProxyCommand；首次指纹核验仍需当前版本支持的直连路径。'
+          : ''
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      source: 'ssh-config',
+      sshConfigAlias: config.alias,
+      sshConfigFingerprint: fingerprint,
       updatedAt: new Date().toISOString()
-    })
+    }
   }
   register(plugin: DiagnosticPlugin) {
     if (plugin.sdkVersion !== 1 || !plugin.readOnly || this.plugins.has(plugin.id))
@@ -78,10 +158,21 @@ export class Engine {
       case 'snapshot':
         return this.snapshot()
       case 'host.save': {
-        if (req.host.id && !this.store.hosts().some((h) => h.id === req.host.id))
-          throw new Error('主机档案已被删除，请新建档案。')
+        const previous = req.host.id
+          ? this.store.hosts().find((h) => h.id === req.host.id)
+          : undefined
+        if (req.host.id && !previous) throw new Error('主机档案已被删除，请新建档案。')
+        const {
+          source: _source,
+          sshConfigAlias: _sshConfigAlias,
+          sshConfigFingerprint: _sshConfigFingerprint,
+          ...draft
+        } = req.host
         const host: Host = {
-          ...req.host,
+          ...draft,
+          ...(previous?.source === 'ssh-config'
+            ? { source: 'ssh-config' as const, sshConfigAlias: previous.sshConfigAlias }
+            : {}),
           keyPath: req.host.auth === 'agent' ? '' : req.host.keyPath,
           id: req.host.id ?? randomUUID(),
           updatedAt: new Date().toISOString()
@@ -93,6 +184,8 @@ export class Engine {
       case 'host.delete':
         if (this.store.hosts().find((host) => host.id === req.id)?.local)
           throw new Error('本机档案由应用自动维护，不能删除。')
+        if (this.store.hosts().find((host) => host.id === req.id)?.source === 'ssh-config')
+          throw new Error('该档案来自本机 SSH 配置，请从 ~/.ssh/config 移除对应 Host。')
         this.store.deleteHost(req.id)
         this.changed()
         return null

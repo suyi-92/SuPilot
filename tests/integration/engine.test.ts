@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { generateKeyPairSync, randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -17,6 +17,7 @@ import {
 import { Engine } from '../../packages/engine/src'
 import { Store } from '../../packages/engine/src/storage'
 import { OpenSSH, runProcess } from '../../packages/engine/src/ssh'
+import { discoverSshConfig } from '../../packages/engine/src/ssh/config'
 import { StartupMarker } from '../../packages/engine/src/sessions'
 import { diagnostics } from '../../plugins/diagnostics/src'
 
@@ -97,17 +98,53 @@ test('SQLite persists host snapshots; interrupted work becomes unknown on restar
     rmSync(directory, { recursive: true, force: true })
   }
 })
-test('Engine creates one persistent local host profile without opening a session', async () => {
+test('SSH config discovery reads aliases, defaults, identity paths and includes without connecting', () => {
   const directory = temp()
-  let engine = new Engine(directory, () => {})
+  const includeDir = join(directory, 'conf.d')
+  mkdirSync(includeDir)
+  const config = join(directory, 'config')
+  writeFileSync(
+    config,
+    `Host Ubuntu-24\n  HostName 192.0.2.10\n  User suyi\n\nHost Included\n  HostName included.example\nInclude conf.d/*\nHost *\n  Port 2200\n  IdentityFile ~/.ssh/id_ed25519\n`
+  )
+  writeFileSync(join(includeDir, 'extra.conf'), 'Host VPS\n  HostName 203.0.113.20\n  Port 2222\n')
   try {
-    const local = engine.snapshot().hosts.filter((h) => h.local)
-    assert.equal(local.length, 1)
-    assert.equal(local[0].address, '127.0.0.1')
+    const hosts = discoverSshConfig(config)
+    assert.deepEqual(
+      hosts.map(({ alias, hostname, port, username }) => ({ alias, hostname, port, username })),
+      [
+        { alias: 'Ubuntu-24', hostname: '192.0.2.10', port: 2200, username: 'suyi' },
+        { alias: 'Included', hostname: 'included.example', port: 2200, username: 'suyi' },
+        { alias: 'VPS', hostname: '203.0.113.20', port: 2222, username: 'suyi' }
+      ]
+    )
+    assert.ok(
+      hosts[0].identityFile.endsWith('.ssh\\id_ed25519') ||
+        hosts[0].identityFile.endsWith('.ssh/id_ed25519')
+    )
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+test('Engine imports and refreshes SSH config hosts without opening a session', async () => {
+  const directory = temp()
+  const config = join(directory, 'config')
+  writeFileSync(config, 'Host fixture\n  HostName 127.0.0.1\n  User tester\n  Port 22022\n')
+  let engine = new Engine(directory, () => {}, { sshConfigPath: config })
+  try {
+    const imported = engine.snapshot().hosts.filter((h) => h.source === 'ssh-config')
+    assert.equal(imported.length, 1)
+    assert.equal(imported[0].sshConfigAlias, 'fixture')
+    assert.equal(imported[0].port, 22022)
+    const sshArgs = engine.ssh.args(imported[0])
+    assert.ok(sshArgs.includes(config))
+    assert.equal(engine.ssh.destination(imported[0]), 'fixture')
     assert.equal(engine.snapshot().sessions.length, 0)
     await engine.shutdown()
-    engine = new Engine(directory, () => {})
-    assert.equal(engine.snapshot().hosts.filter((h) => h.local).length, 1)
+    writeFileSync(config, 'Host fixture\n  HostName 127.0.0.1\n  User tester\n  Port 22023\n')
+    engine = new Engine(directory, () => {}, { sshConfigPath: config })
+    assert.equal(engine.snapshot().hosts.filter((h) => h.source === 'ssh-config').length, 1)
+    assert.equal(engine.snapshot().hosts.find((h) => h.source === 'ssh-config')?.port, 22023)
   } finally {
     await engine.shutdown()
     rmSync(directory, { recursive: true, force: true })
@@ -250,7 +287,9 @@ test(
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     const address = server.address() as { port: number }
-    const engine = new Engine(join(directory, 'app data with spaces'), () => {})
+    const engine = new Engine(join(directory, 'app data with spaces'), () => {}, {
+      sshConfigPath: null
+    })
     engine.register(diagnostics)
     try {
       const target = host(address.port)
@@ -337,7 +376,7 @@ test(
 
 test('task cancellation, unavailable checks and connection loss keep distinct outcomes', async () => {
   const directory = temp()
-  const engine = new Engine(directory, () => {})
+  const engine = new Engine(directory, () => {}, { sshConfigPath: null })
   engine.register(diagnostics)
   const original = engine.ssh.execute.bind(engine.ssh)
   try {
