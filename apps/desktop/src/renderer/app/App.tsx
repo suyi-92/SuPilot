@@ -521,6 +521,54 @@ export function App() {
   )
   const groups = [...new Set(filtered.map((h) => h.group || '未分组'))]
   const lastTask = target ? data.tasks.find((t) => t.target.id === target.id) : undefined
+  const workspaceActions = (
+    <div className="toolbar-actions" aria-label="工作区工具">
+      {!ui.sidebar && (
+        <IconButton
+          label="展开主机栏"
+          onClick={() => ui.set({ sidebar: true, focus: false })}
+        >
+          <PanelLeftOpen size={15} />
+        </IconButton>
+      )}
+      {current?.kind === 'terminal' && (
+        <>
+          <IconButton
+            label="左右分屏"
+            disabled={busy}
+            onClick={() => split('horizontal')}
+          >
+            <Columns2 size={16} />
+          </IconButton>
+          <IconButton
+            label="上下分屏"
+            disabled={busy}
+            onClick={() => split('vertical')}
+          >
+            <Rows2 size={16} />
+          </IconButton>
+        </>
+      )}
+      <IconButton
+        label={ui.focus ? '退出专注模式' : '专注终端'}
+        aria-pressed={ui.focus}
+        onClick={() => ui.set({ focus: !ui.focus })}
+      >
+        <Maximize2 size={15} />
+      </IconButton>
+      <IconButton
+        label={detailsVisible ? '收起详情' : '展开详情'}
+        aria-pressed={detailsVisible}
+        onClick={() => {
+          if (narrow) setDetailsPeek(!detailsPeek)
+          else ui.set({ details: !ui.details })
+          ui.set({ focus: false })
+        }}
+      >
+        {detailsVisible ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+      </IconButton>
+    </div>
+  )
   return (
     <TooltipProvider>
       <div className={`app-shell ${ui.focus ? 'focus-mode' : ''} ${demo ? 'demo-mode' : ''}`}>
@@ -804,7 +852,7 @@ export function App() {
             )}
             <Panel id="workspace" order={2} minSize={40}>
               <main className="workspace">
-                <div className="tab-bar">
+                <div className={`tab-bar ${current?.kind === 'terminal' ? 'terminal-tab-bar' : ''}`}>
                   <div className="tabs" role="tablist" aria-label="工作标签">
                     {!tabs.length && (
                       <span className="welcome-tab">
@@ -863,82 +911,36 @@ export function App() {
                       </div>
                     ))}
                   </div>
-                  <IconButton
-                    label="新建选中主机的会话"
-                    disabled={!selected || busy}
-                    onClick={() => selected && openHost(selected, true)}
-                  >
-                    <Plus size={16} />
-                  </IconButton>
+                  <div className="tab-actions">
+                    {current?.kind === 'terminal' && workspaceActions}
+                    <IconButton
+                      label="新建选中主机的会话"
+                      disabled={!selected || busy}
+                      onClick={() => selected && openHost(selected, true)}
+                    >
+                      <Plus size={16} />
+                    </IconButton>
+                  </div>
                 </div>
-                <div className="workspace-toolbar">
-                  <div className="breadcrumb">
-                    <TerminalSquare size={13} />
-                    <span>
-                      {current?.kind === 'terminal'
-                        ? '终端工作区'
-                        : current?.kind === 'operation'
+                {current?.kind !== 'terminal' && (
+                  <div className="workspace-toolbar">
+                    <div className="breadcrumb">
+                      <TerminalSquare size={13} />
+                      <span>
+                        {current?.kind === 'operation'
                           ? '操作中心'
                           : current?.kind === 'host'
                             ? '主机管理'
                             : current?.kind === 'tasks'
                               ? '执行记录'
                               : '开始使用'}
-                    </span>
-                    <ChevronRight size={12} />
-                    <strong className="truncate">{target?.name || 'SuPilot'}</strong>
+                      </span>
+                      <ChevronRight size={12} />
+                      <strong className="truncate">{target?.name || 'SuPilot'}</strong>
+                    </div>
+                    {workspaceActions}
                   </div>
-                  <div className="toolbar-actions">
-                    {!ui.sidebar && (
-                      <IconButton
-                        label="展开主机栏"
-                        onClick={() => ui.set({ sidebar: true, focus: false })}
-                      >
-                        <PanelLeftOpen size={15} />
-                      </IconButton>
-                    )}
-                    {current?.kind === 'terminal' && (
-                      <>
-                        <IconButton
-                          label="左右分屏"
-                          disabled={current?.kind !== 'terminal' || busy}
-                          onClick={() => split('horizontal')}
-                        >
-                          <Columns2 size={16} />
-                        </IconButton>
-                        <IconButton
-                          label="上下分屏"
-                          disabled={current?.kind !== 'terminal' || busy}
-                          onClick={() => split('vertical')}
-                        >
-                          <Rows2 size={16} />
-                        </IconButton>
-                      </>
-                    )}
-                    <IconButton
-                      label={ui.focus ? '退出专注模式' : '专注终端'}
-                      aria-pressed={ui.focus}
-                      onClick={() => ui.set({ focus: !ui.focus })}
-                    >
-                      <Maximize2 size={15} />
-                    </IconButton>
-                    <IconButton
-                      label={detailsVisible ? '收起详情' : '展开详情'}
-                      aria-pressed={detailsVisible}
-                      onClick={() => {
-                        if (narrow) setDetailsPeek(!detailsPeek)
-                        else ui.set({ details: !ui.details })
-                        ui.set({ focus: false })
-                      }}
-                    >
-                      {detailsVisible ? (
-                        <PanelRightClose size={16} />
-                      ) : (
-                        <PanelRightOpen size={16} />
-                      )}
-                    </IconButton>
-                  </div>
-                </div>
+                )}
                 <div className="work-content">
                   {tabs.map((tab) => (
                     <div

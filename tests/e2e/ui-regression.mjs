@@ -46,12 +46,12 @@ async function setUiSize(page, size) {
   await page.getByRole('button', { name: '完成', exact: true }).click()
   await settle(page)
 }
-async function resize(app, page, width) {
-  await app.evaluate(({ BrowserWindow }, width) => {
+async function resize(app, page, width, height = 940) {
+  await app.evaluate(({ BrowserWindow }, { width, height }) => {
     const w = BrowserWindow.getAllWindows()[0]
     if (w.isMaximized()) w.unmaximize()
-    w.setSize(width, 940)
-  }, width)
+    w.setSize(width, height)
+  }, { width, height })
   await settle(page)
 }
 
@@ -151,8 +151,37 @@ export async function checkWorkbench({ page, app, output, report }) {
   const prefsBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('supilot-ui')))
   report.ui.fonts = []
   report.ui.windows = []
+  report.ui.ansi = []
   const minSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getMinimumSize())
   report.ui.minimumWindow = minSize
+  const shellColors = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement)
+    const status = getComputedStyle(document.querySelector('.status-bar'))
+    return {
+      background: root.getPropertyValue('--background').trim(),
+      surface: root.getPropertyValue('--surface').trim(),
+      status: status.backgroundColor,
+      statusText: status.color,
+      selection: root.getPropertyValue('--selection-active').trim(),
+      ring: root.getPropertyValue('--ring').trim()
+    }
+  })
+  assert.equal(shellColors.status, 'rgb(16, 18, 22)', 'Formal/demo status bar uses a neutral shell color')
+  assert.ok(contrast(shellColors.statusText, shellColors.status) >= 4.5)
+  report.ui.shellColors = shellColors
+  for (const ansi of ['dark-plus', 'graphite', 'classic']) {
+    await page.getByLabel('界面与终端设置', { exact: true }).click()
+    await page.getByLabel('终端 ANSI 配色').selectOption(ansi)
+    await page.getByRole('button', { name: '完成', exact: true }).click()
+    await settle(page)
+    const terminal = await styles(page.locator('.terminal-pane').first())
+    assert.match(terminal.background, /^rgb\(/)
+    report.ui.ansi.push({ ansi, terminalBackground: terminal.background })
+  }
+  await page.getByLabel('界面与终端设置', { exact: true }).click()
+  await page.getByLabel('终端 ANSI 配色').selectOption(prefsBefore.ansi)
+  await page.getByRole('button', { name: '完成', exact: true }).click()
+  await settle(page)
   for (const size of [13, 17]) {
     await resize(app, page, 1440)
     await setUiSize(page, size)
@@ -188,19 +217,39 @@ export async function checkWorkbench({ page, app, output, report }) {
     await shot(page, output, `task-log-${size}`)
     report.ui.fonts.push({ size, fonts })
     await terminalTab(page).click()
-    for (const width of [minSize[0], 900, 1280, 1440]) {
-      await resize(app, page, width)
+    const windows = [
+      [minSize[0], minSize[1]],
+      [900, 650],
+      [1280, 800],
+      [1440, 940]
+    ]
+    for (const [width, height] of windows) {
+      await resize(app, page, width, height)
       const layout = await page.evaluate(() => {
         const header = document.querySelector('.app-header')
         const command = document.querySelector('.command-center')
         const box = command.getBoundingClientRect()
+        const activePane = document.querySelector('.tab-content:not([hidden]) .terminal-pane')
+        const paneHeader = activePane?.querySelector('.pane-header')
+        const selectedHost = document.querySelector('.host-row.selected')
+        const selection = document.querySelector('.host-selection')
+        const actions = selection?.querySelector('.selection-actions')
+        const tabBar = document.querySelector('.tab-bar')
+        const tabActions = document.querySelector('.tab-actions')
         const children = [...header.children].filter((el) => getComputedStyle(el).display !== 'none')
           .map((el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right } })
-        return { viewport: innerWidth, command: box.width, headerOverflow: header.scrollWidth - header.clientWidth,
+        const bounds = (el) => el ? (() => { const r = el.getBoundingClientRect(); return {
+          left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height
+        } })() : null
+        return { viewport: innerWidth, viewportHeight: innerHeight, command: box.width, headerOverflow: header.scrollWidth - header.clientWidth,
           overflow: document.documentElement.scrollWidth - innerWidth,
           overlap: children.some((r, i) => i && r.left < children[i - 1].right - 1),
           right: children.at(-1).right,
-          contextVisible: getComputedStyle(document.querySelector('.command-context')).display !== 'none' }
+          contextVisible: getComputedStyle(document.querySelector('.command-context')).display !== 'none',
+          activePane: bounds(activePane), paneHeader: bounds(paneHeader), selectedHost: bounds(selectedHost),
+          selection: bounds(selection), actions: bounds(actions), tabBar: bounds(tabBar), tabActions: bounds(tabActions),
+          terminalToolbarCount: document.querySelectorAll('.terminal-tab-bar .toolbar-actions').length,
+          workspaceToolbarCount: document.querySelectorAll('.workspace-toolbar').length }
       })
       const limit = layout.viewport <= 900 ? Math.min(layout.viewport * 0.28, 260) : Math.min(420, layout.viewport * 0.38)
       assert.ok(layout.command <= limit + 1 && layout.command > 100, JSON.stringify(layout))
@@ -208,12 +257,18 @@ export async function checkWorkbench({ page, app, output, report }) {
       assert.ok(layout.right <= layout.viewport)
       assert.equal(layout.contextVisible, layout.viewport > 900)
       if (layout.viewport > 900) assert.ok(layout.command > 260)
+      assert.ok(layout.selectedHost?.width > 80 && layout.selectedHost?.height > 0)
+      assert.ok(layout.actions?.bottom <= layout.selection?.bottom + 1, JSON.stringify(layout))
+      assert.ok(layout.paneHeader?.height >= 30 && layout.paneHeader?.bottom <= layout.activePane?.bottom + 1)
+      assert.equal(layout.terminalToolbarCount, 1)
+      assert.equal(layout.workspaceToolbarCount, 0)
+      assert.ok(layout.tabActions?.left >= layout.tabBar?.left)
       report.ui.windows.push({ size, outerWidth: width, ...layout })
-      await shot(page, output, `window-${width}-ui-${size}`)
+      await shot(page, output, `window-${width}x${height}-ui-${size}`)
     }
   }
   await setUiSize(page, 13)
-  await resize(app, page, 1440)
+  await resize(app, page, 1440, 940)
   const prefsAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('supilot-ui')))
   assert.equal(prefsAfter.terminalSize, prefsBefore.terminalSize)
   assert.equal(prefsAfter.ansi, prefsBefore.ansi)

@@ -8,7 +8,7 @@ import { checkWelcome, checkPrimary, checkWorkbench, checkTerminalFocus } from '
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
 const packaged = process.argv.includes('--packaged')
-const output = join(root, '.local/Test/ui-round1', `${packaged ? 'packaged' : 'desktop'}-${Date.now()}`)
+const output = join(root, '.local/Test/ui-round2', `${packaged ? 'packaged' : 'desktop'}-${Date.now()}`)
 await mkdir(output, { recursive: true })
 const executablePath = packaged
   ? join(root, 'release/win-unpacked/SuPilot.exe')

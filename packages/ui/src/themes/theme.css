@@ -1,33 +1,37 @@
 :root {
   color-scheme: dark;
-  --background: #1e1e1e;
-  --surface: #252526;
-  --surface-raised: #2d2d30;
-  --surface-hover: #2a2d2e;
-  --activity-background: #181818;
-  --title-background: #181818;
-  --input-background: #1f1f1f;
-  --input-border: #3f3f46;
-  --foreground: #d4d4d4;
-  --muted-foreground: #c2c2c2;
-  --subtle-foreground: #a5a5a5;
-  --border: #454545;
-  --border-soft: #2b2b2b;
-  --accent: #0078d4;
-  --accent-hover: #006bb6;
-  --link: #4fc1ff;
+  --background: #171a20;
+  --surface: #14171c;
+  --surface-raised: #20252d;
+  --surface-hover: #272f3a;
+  --activity-background: #101216;
+  --title-background: #101216;
+  --input-background: #1b2028;
+  --input-border: #384454;
+  --foreground: #e6eaf0;
+  --muted-foreground: #a7b0c0;
+  --subtle-foreground: #8d97a8;
+  --border: #384454;
+  --border-soft: #2a313d;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-active: #1e40af;
+  --link: #7aa2f7;
+  --ring: #8cb4ff;
   --accent-foreground: #ffffff;
-  --accent-muted: #094771;
-  --selection-inactive: #37373d;
-  --success: #89d185;
-  --warning: #cca700;
-  --danger: #f48771;
-  --success-background: #253025;
-  --warning-background: #352e1b;
-  --danger-background: #352422;
-  --demo-background: #6f3c86;
-  --terminal-background: #1e1e1e;
-  --ring: #007fd4;
+  --accent-muted: #243247;
+  --selection-active: #243247;
+  --selection-inactive: #202731;
+  --success: #7ccb9b;
+  --warning: #e7bd72;
+  --danger: #f08a8a;
+  --success-background: #1e3025;
+  --warning-background: #332a1b;
+  --danger-background: #342326;
+  --demo-background: #20252d;
+  --terminal-background: #101318;
+  --status-background: #101216;
+  --status-foreground: #a7b0c0;
   --ui-font-size: 13px;
   --mono-font: 'Cascadia Mono', Consolas, 'Microsoft YaHei UI', monospace;
   font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
@@ -104,11 +108,11 @@ svg {
   background: var(--accent-hover);
 }
 .button-primary:active:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-active);
   filter: none;
 }
 .button-primary:focus-visible {
-  outline-color: var(--accent-foreground);
+  outline-color: var(--ring);
 }
 .button-danger {
   color: var(--danger);
@@ -234,7 +238,7 @@ svg {
 }
 
 button:active:not(:disabled) {
-  filter: brightness(1.12);
+  filter: none;
 }
 .button:focus-visible,
 .icon-button:focus-visible {
