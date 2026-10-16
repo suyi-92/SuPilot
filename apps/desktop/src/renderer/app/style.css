@@ -1527,6 +1527,9 @@ input[type='range'] {
   font-size: 0.84615rem;
   white-space: nowrap;
 }
+.host-row .host-state.local {
+  color: var(--link);
+}
 .welcome-tab {
   display: flex;
   align-items: center;

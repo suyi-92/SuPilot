@@ -97,6 +97,22 @@ test('SQLite persists host snapshots; interrupted work becomes unknown on restar
     rmSync(directory, { recursive: true, force: true })
   }
 })
+test('Engine creates one persistent local host profile without opening a session', async () => {
+  const directory = temp()
+  let engine = new Engine(directory, () => {})
+  try {
+    const local = engine.snapshot().hosts.filter((h) => h.local)
+    assert.equal(local.length, 1)
+    assert.equal(local[0].address, '127.0.0.1')
+    assert.equal(engine.snapshot().sessions.length, 0)
+    await engine.shutdown()
+    engine = new Engine(directory, () => {})
+    assert.equal(engine.snapshot().hosts.filter((h) => h.local).length, 1)
+  } finally {
+    await engine.shutdown()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
 test('authentication marker tolerates every stream boundary and rejects banner lookalikes', () => {
   const marker = '\x1b]777;supilot-session:' + randomUUID() + '\x07'
   for (let i = 0; i <= marker.length; i++) {

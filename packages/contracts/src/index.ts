@@ -3,6 +3,8 @@ import { z } from 'zod'
 export const HostInput = z
   .object({
     id: z.string().uuid().optional(),
+    // Automatically maintained loopback profile for the current machine.
+    local: z.boolean().optional(),
     name: z.string().trim().min(1).max(100),
     address: z
       .string()

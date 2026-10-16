@@ -57,7 +57,7 @@ async function launch() {
 try {
   let page = await launch()
   // Keep visual checks reproducible without changing the user's production profile.
-  await page.getByRole('button', { name: '界面与终端设置', exact: true }).first().click()
+  await page.getByLabel('界面与终端设置', { exact: true }).click()
   await page.getByLabel('界面字号', { exact: true }).fill('13')
   await page.getByLabel('终端字号', { exact: true }).fill('14')
   await page.getByLabel('终端 ANSI 配色').selectOption('dark-plus')
@@ -66,6 +66,10 @@ try {
   const initial = await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))
   assert.match(initial.dataPath, /SuPilot-test$/)
   assert.equal(initial.engineError, undefined)
+  const localHost = initial.hosts.find((host) => host.local)
+  assert.ok(localHost, 'Local host profile is discovered on first launch')
+  assert.equal(localHost.address, '127.0.0.1')
+  assert.equal(initial.sessions.length, 0, 'Local discovery does not open a session')
   report.checks.push(
     'Engine utilityProcess starts; test profile is isolated; SQLite snapshot loads'
   )

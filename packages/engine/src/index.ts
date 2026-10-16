@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { hostname, userInfo } from 'node:os'
 import { Request, type Host, type Snapshot } from '@supilot/contracts'
 import type { DiagnosticPlugin } from '@supilot/plugin-sdk'
 import { Store } from './storage'
@@ -22,10 +23,36 @@ export class Engine {
     private publish: (snapshot: Snapshot) => void
   ) {
     this.store = new Store(dataPath)
+    this.ensureLocalHost()
     this.ssh = new OpenSSH(dataPath)
     this.trust = new Trust(this.ssh)
     this.sessions = new Sessions(this.ssh, () => this.changed())
     this.tasks = new Tasks(this.store, this.ssh, () => this.changed())
+  }
+  private ensureLocalHost() {
+    if (this.store.hosts().some((host) => host.local)) return
+    const username =
+      (userInfo().username || process.env.USERNAME || 'user')
+        .replace(/[^a-zA-Z0-9_.@-]/g, '-')
+        .replace(/^[^a-zA-Z0-9_]/, 'user-')
+        .slice(0, 64) || 'user'
+    const machine = hostname().trim() || 'localhost'
+    this.store.saveHost({
+      id: randomUUID(),
+      local: true,
+      name: `本机 · ${machine}`,
+      address: '127.0.0.1',
+      port: 22,
+      sshdPort: 22,
+      username,
+      auth: 'agent',
+      keyPath: '',
+      group: '本机',
+      tags: ['localhost'],
+      notes:
+        '由 SuPilot 自动识别的本机档案。不会自动连接；需要 Windows OpenSSH Server 才能通过 SSH 打开。',
+      updatedAt: new Date().toISOString()
+    })
   }
   register(plugin: DiagnosticPlugin) {
     if (plugin.sdkVersion !== 1 || !plugin.readOnly || this.plugins.has(plugin.id))
@@ -64,6 +91,8 @@ export class Engine {
         return host
       }
       case 'host.delete':
+        if (this.store.hosts().find((host) => host.id === req.id)?.local)
+          throw new Error('本机档案由应用自动维护，不能删除。')
         this.store.deleteHost(req.id)
         this.changed()
         return null
