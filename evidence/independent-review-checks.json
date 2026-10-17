@@ -1,0 +1,417 @@
+{
+  "scope": "Independent source/archive comparison, review of supplied report and original screenshots, local script syntax checks, isolated Linux Chromium layout reproduction. No pnpm build/test, Windows Electron, installer, real VPS, OS DPI, or IME rerun.",
+  "hashes": {
+    "SuPilot-source-round2.1.zip": "ca17147f8bf994e4c569a905401637a5b3a9ea5d7257930c21d615002dcbbf32",
+    "SuPilot-ui-round2.1-evidence.zip": "93b59019ba6a5759af6a015d4852e608079f8f5f416370f1d62b7992a2340148"
+  },
+  "sourceDiff": {
+    "baseline": "/mnt/data/supilot-round21-review/baseline",
+    "changed": [
+      "apps/desktop/src/renderer/app/App.tsx",
+      "apps/desktop/src/renderer/app/README.md",
+      "apps/desktop/src/renderer/app/style.css",
+      "apps/desktop/src/renderer/features/terminal/Terminal.tsx",
+      "docs/development.md",
+      "docs/ui-guidelines.md",
+      "tests/e2e/README.md",
+      "tests/e2e/desktop.mjs",
+      "tests/e2e/ui-regression.mjs",
+      "tests/fixtures/ssh-server.mjs"
+    ],
+    "added": [
+      "SuPilot-UI-round2-review.md",
+      "SuPilot-UI-round2.1-prompt.md"
+    ],
+    "removed": []
+  },
+  "protectedPathsCompared": {
+    "packages/engine/": {
+      "files": 17,
+      "identical": true
+    },
+    "packages/contracts/": {
+      "files": 4,
+      "identical": true
+    },
+    "packages/ui/": {
+      "files": 7,
+      "identical": true
+    },
+    "apps/desktop/src/engine/": {
+      "files": 2,
+      "identical": true
+    },
+    "apps/desktop/src/main/": {
+      "files": 2,
+      "identical": true
+    },
+    "apps/desktop/src/preload/": {
+      "files": 2,
+      "identical": true
+    }
+  },
+  "unchangedLockfile": true,
+  "evidence": {
+    "fileCount": 56,
+    "byExtension": {
+      ".png": 54,
+      ".json": 2
+    },
+    "checks": 20,
+    "errors": [],
+    "packaged": false,
+    "sourceOfExecutionClaims": "uploaded desktop-validation.json, not independently rerun"
+  },
+  "syntaxChecks": [
+    {
+      "command": "node --check tests/e2e/ui-regression.mjs",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "node --check tests/e2e/desktop.mjs",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": "node --check tests/fixtures/ssh-server.mjs",
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "buttonReproduction": {
+    "scope": "Isolated Chromium component harness, unmodified uploaded theme/app CSS with explicit reset and synthetic markup; not Electron or Windows. Linux font fallback applies. Example CSS is applied only in the harness, not the source.",
+    "browser": "/usr/bin/chromium",
+    "measurements": [
+      {
+        "scenario": "current-css",
+        "size": 12,
+        "button": {
+          "left": 48,
+          "right": 95.90625,
+          "top": 97.609375,
+          "bottom": 124.609375,
+          "width": 47.90625,
+          "height": 27
+        },
+        "labelElement": {
+          "left": 73,
+          "right": 87.90625,
+          "top": 102.796875,
+          "bottom": 119.40625,
+          "width": 14.90625,
+          "height": 16.609375
+        },
+        "textRange": {
+          "left": 73,
+          "right": 95.125,
+          "top": 104.796875,
+          "bottom": 116.796875,
+          "width": 22.125,
+          "height": 12
+        },
+        "icon": {
+          "left": 56,
+          "right": 69,
+          "top": 104.609375,
+          "bottom": 117.609375,
+          "width": 13,
+          "height": 13
+        },
+        "fontSize": "11.077px",
+        "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+        "labelClientWidth": 15,
+        "labelScrollWidth": 22,
+        "labelOverflow": "visible",
+        "labelFlexShrink": "1",
+        "originalTestWouldPass": true,
+        "actualTextInsideButton": true,
+        "textRightOverflow": 0,
+        "rootSize": "12px",
+        "devicePixelRatio": 1.5,
+        "viewport": {
+          "width": 850,
+          "height": 600
+        }
+      },
+      {
+        "scenario": "current-css",
+        "size": 13,
+        "button": {
+          "left": 48,
+          "right": 95.90625,
+          "top": 100.5,
+          "bottom": 127.5,
+          "width": 47.90625,
+          "height": 27
+        },
+        "labelElement": {
+          "left": 73,
+          "right": 87.90625,
+          "top": 105,
+          "bottom": 123,
+          "width": 14.90625,
+          "height": 18
+        },
+        "textRange": {
+          "left": 73,
+          "right": 97,
+          "top": 107,
+          "bottom": 121,
+          "width": 24,
+          "height": 14
+        },
+        "icon": {
+          "left": 56,
+          "right": 69,
+          "top": 107.5,
+          "bottom": 120.5,
+          "width": 13,
+          "height": 13
+        },
+        "fontSize": "12px",
+        "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+        "labelClientWidth": 15,
+        "labelScrollWidth": 24,
+        "labelOverflow": "visible",
+        "labelFlexShrink": "1",
+        "originalTestWouldPass": true,
+        "actualTextInsideButton": false,
+        "textRightOverflow": 1.09375,
+        "rootSize": "13px",
+        "devicePixelRatio": 1.5,
+        "viewport": {
+          "width": 850,
+          "height": 600
+        }
+      },
+      {
+        "scenario": "current-css",
+        "size": 17,
+        "button": {
+          "left": 48,
+          "right": 95.90625,
+          "top": 137.53125,
+          "bottom": 169.0625,
+          "width": 47.90625,
+          "height": 31.53125
+        },
+        "labelElement": {
+          "left": 73,
+          "right": 87.90625,
+          "top": 141.53125,
+          "bottom": 165.0625,
+          "width": 14.90625,
+          "height": 23.53125
+        },
+        "textRange": {
+          "left": 73,
+          "right": 104.375,
+          "top": 144.53125,
+          "bottom": 161.53125,
+          "width": 31.375,
+          "height": 17
+        },
+        "icon": {
+          "left": 56,
+          "right": 69,
+          "top": 146.796875,
+          "bottom": 159.796875,
+          "width": 13,
+          "height": 13
+        },
+        "fontSize": "15.6924px",
+        "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+        "labelClientWidth": 15,
+        "labelScrollWidth": 31,
+        "labelOverflow": "visible",
+        "labelFlexShrink": "1",
+        "originalTestWouldPass": true,
+        "actualTextInsideButton": false,
+        "textRightOverflow": 8.46875,
+        "rootSize": "17px",
+        "devicePixelRatio": 1.5,
+        "viewport": {
+          "width": 850,
+          "height": 600
+        }
+      },
+      {
+        "scenario": "harness-only-two-row-example",
+        "size": 17,
+        "button": {
+          "left": 48,
+          "right": 157.90625,
+          "top": 137.53125,
+          "bottom": 169.0625,
+          "width": 109.90625,
+          "height": 31.53125
+        },
+        "labelElement": {
+          "left": 95.765625,
+          "right": 127.140625,
+          "top": 141.53125,
+          "bottom": 165.0625,
+          "width": 31.375,
+          "height": 23.53125
+        },
+        "textRange": {
+          "left": 95.765625,
+          "right": 127.140625,
+          "top": 144.53125,
+          "bottom": 161.53125,
+          "width": 31.375,
+          "height": 17
+        },
+        "icon": {
+          "left": 78.765625,
+          "right": 91.765625,
+          "top": 146.796875,
+          "bottom": 159.796875,
+          "width": 13,
+          "height": 13
+        },
+        "fontSize": "15.6924px",
+        "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+        "labelClientWidth": 31,
+        "labelScrollWidth": 31,
+        "labelOverflow": "visible",
+        "labelFlexShrink": "0",
+        "originalTestWouldPass": true,
+        "actualTextInsideButton": true,
+        "textRightOverflow": 0,
+        "rootSize": "17px",
+        "devicePixelRatio": 1.5,
+        "viewport": {
+          "width": 850,
+          "height": 600
+        }
+      }
+    ]
+  },
+  "ansiScreenshotSampling": [
+    {
+      "ansi": "dark-plus",
+      "sampleRegion": [
+        560,
+        270,
+        1040,
+        318
+      ],
+      "colors": {
+        "red": {
+          "rgb": [
+            205,
+            49,
+            49
+          ],
+          "exactPixelsInSampleRegion": 222
+        },
+        "green": {
+          "rgb": [
+            13,
+            188,
+            121
+          ],
+          "exactPixelsInSampleRegion": 308
+        },
+        "blue": {
+          "rgb": [
+            36,
+            114,
+            200
+          ],
+          "exactPixelsInSampleRegion": 239
+        }
+      }
+    },
+    {
+      "ansi": "graphite",
+      "sampleRegion": [
+        560,
+        270,
+        1040,
+        318
+      ],
+      "colors": {
+        "red": {
+          "rgb": [
+            231,
+            136,
+            142
+          ],
+          "exactPixelsInSampleRegion": 222
+        },
+        "green": {
+          "rgb": [
+            125,
+            206,
+            176
+          ],
+          "exactPixelsInSampleRegion": 308
+        },
+        "blue": {
+          "rgb": [
+            122,
+            165,
+            245
+          ],
+          "exactPixelsInSampleRegion": 239
+        }
+      }
+    },
+    {
+      "ansi": "classic",
+      "sampleRegion": [
+        560,
+        270,
+        1040,
+        318
+      ],
+      "colors": {
+        "red": {
+          "rgb": [
+            255,
+            117,
+            127
+          ],
+          "exactPixelsInSampleRegion": 222
+        },
+        "green": {
+          "rgb": [
+            145,
+            207,
+            123
+          ],
+          "exactPixelsInSampleRegion": 308
+        },
+        "blue": {
+          "rgb": [
+            130,
+            170,
+            255
+          ],
+          "exactPixelsInSampleRegion": 239
+        }
+      }
+    }
+  ],
+  "testRestorationIssue": {
+    "file": "tests/e2e/ui-regression.mjs",
+    "lines": [
+      313,
+      325
+    ],
+    "expression": "Math.max(restoreSidebarHandleX, handleBox.x + handleBox.width / 2 + 100)",
+    "reason": "forces the drag endpoint at least 100 CSS px to the right of the current handle, not necessarily back to the saved coordinate.",
+    "reportedSidebarWidthsAt900": {
+      "12": 133.9166717529297,
+      "13": 133.9166717529297,
+      "17": 240.21875
+    }
+  },
+  "verdict": "Not fully accepted: visible new-session label text still overflows at minimum sidebar width and large UI font; element-box-only regression assertion passes incorrectly. Terminal heading refinement and representative ANSI theme verification accepted within their documented scope."
+}

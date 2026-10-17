@@ -57,7 +57,7 @@
 
 ## v0.1 实际实现位置
 
-- App.tsx 统一编排工作区，workspace/ 暂保留职责说明；不维护重复状态。
+- App.tsx 统一编排简化流程外壳、主机/终端/工具/任务/设置入口与页面级导航；workspace/ 保留职责说明，终端资源由页面外稳定容器承载，不维护重复后台状态。
 - Engine 的主机 CRUD/最小插件注册在 src/index.ts，hosts/ 与 plugins/ 暂保留职责说明。
 - 共享 UI 组件在 packages/ui/src/index.tsx，components/ 暂无重复拆分。
 - Diagnostics 有真实源码；Access/SuRelay 只有规划入口和说明，无远端执行。

@@ -1,0 +1,210 @@
+{
+  "scope": "Isolated Chromium component harness, unmodified uploaded theme/app CSS with explicit reset and synthetic markup; not Electron or Windows. Linux font fallback applies. Example CSS is applied only in the harness, not the source.",
+  "browser": "/usr/bin/chromium",
+  "measurements": [
+    {
+      "scenario": "current-css",
+      "size": 12,
+      "button": {
+        "left": 48,
+        "right": 95.90625,
+        "top": 97.609375,
+        "bottom": 124.609375,
+        "width": 47.90625,
+        "height": 27
+      },
+      "labelElement": {
+        "left": 73,
+        "right": 87.90625,
+        "top": 102.796875,
+        "bottom": 119.40625,
+        "width": 14.90625,
+        "height": 16.609375
+      },
+      "textRange": {
+        "left": 73,
+        "right": 95.125,
+        "top": 104.796875,
+        "bottom": 116.796875,
+        "width": 22.125,
+        "height": 12
+      },
+      "icon": {
+        "left": 56,
+        "right": 69,
+        "top": 104.609375,
+        "bottom": 117.609375,
+        "width": 13,
+        "height": 13
+      },
+      "fontSize": "11.077px",
+      "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+      "labelClientWidth": 15,
+      "labelScrollWidth": 22,
+      "labelOverflow": "visible",
+      "labelFlexShrink": "1",
+      "originalTestWouldPass": true,
+      "actualTextInsideButton": true,
+      "textRightOverflow": 0,
+      "rootSize": "12px",
+      "devicePixelRatio": 1.5,
+      "viewport": {
+        "width": 850,
+        "height": 600
+      }
+    },
+    {
+      "scenario": "current-css",
+      "size": 13,
+      "button": {
+        "left": 48,
+        "right": 95.90625,
+        "top": 100.5,
+        "bottom": 127.5,
+        "width": 47.90625,
+        "height": 27
+      },
+      "labelElement": {
+        "left": 73,
+        "right": 87.90625,
+        "top": 105,
+        "bottom": 123,
+        "width": 14.90625,
+        "height": 18
+      },
+      "textRange": {
+        "left": 73,
+        "right": 97,
+        "top": 107,
+        "bottom": 121,
+        "width": 24,
+        "height": 14
+      },
+      "icon": {
+        "left": 56,
+        "right": 69,
+        "top": 107.5,
+        "bottom": 120.5,
+        "width": 13,
+        "height": 13
+      },
+      "fontSize": "12px",
+      "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+      "labelClientWidth": 15,
+      "labelScrollWidth": 24,
+      "labelOverflow": "visible",
+      "labelFlexShrink": "1",
+      "originalTestWouldPass": true,
+      "actualTextInsideButton": false,
+      "textRightOverflow": 1.09375,
+      "rootSize": "13px",
+      "devicePixelRatio": 1.5,
+      "viewport": {
+        "width": 850,
+        "height": 600
+      }
+    },
+    {
+      "scenario": "current-css",
+      "size": 17,
+      "button": {
+        "left": 48,
+        "right": 95.90625,
+        "top": 137.53125,
+        "bottom": 169.0625,
+        "width": 47.90625,
+        "height": 31.53125
+      },
+      "labelElement": {
+        "left": 73,
+        "right": 87.90625,
+        "top": 141.53125,
+        "bottom": 165.0625,
+        "width": 14.90625,
+        "height": 23.53125
+      },
+      "textRange": {
+        "left": 73,
+        "right": 104.375,
+        "top": 144.53125,
+        "bottom": 161.53125,
+        "width": 31.375,
+        "height": 17
+      },
+      "icon": {
+        "left": 56,
+        "right": 69,
+        "top": 146.796875,
+        "bottom": 159.796875,
+        "width": 13,
+        "height": 13
+      },
+      "fontSize": "15.6924px",
+      "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+      "labelClientWidth": 15,
+      "labelScrollWidth": 31,
+      "labelOverflow": "visible",
+      "labelFlexShrink": "1",
+      "originalTestWouldPass": true,
+      "actualTextInsideButton": false,
+      "textRightOverflow": 8.46875,
+      "rootSize": "17px",
+      "devicePixelRatio": 1.5,
+      "viewport": {
+        "width": 850,
+        "height": 600
+      }
+    },
+    {
+      "scenario": "harness-only-two-row-example",
+      "size": 17,
+      "button": {
+        "left": 48,
+        "right": 157.90625,
+        "top": 137.53125,
+        "bottom": 169.0625,
+        "width": 109.90625,
+        "height": 31.53125
+      },
+      "labelElement": {
+        "left": 95.765625,
+        "right": 127.140625,
+        "top": 141.53125,
+        "bottom": 165.0625,
+        "width": 31.375,
+        "height": 23.53125
+      },
+      "textRange": {
+        "left": 95.765625,
+        "right": 127.140625,
+        "top": 144.53125,
+        "bottom": 161.53125,
+        "width": 31.375,
+        "height": 17
+      },
+      "icon": {
+        "left": 78.765625,
+        "right": 91.765625,
+        "top": 146.796875,
+        "bottom": 159.796875,
+        "width": 13,
+        "height": 13
+      },
+      "fontSize": "15.6924px",
+      "fontFamily": "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", sans-serif",
+      "labelClientWidth": 31,
+      "labelScrollWidth": 31,
+      "labelOverflow": "visible",
+      "labelFlexShrink": "0",
+      "originalTestWouldPass": true,
+      "actualTextInsideButton": true,
+      "textRightOverflow": 0,
+      "rootSize": "17px",
+      "devicePixelRatio": 1.5,
+      "viewport": {
+        "width": 850,
+        "height": 600
+      }
+    }
+  ]
+}

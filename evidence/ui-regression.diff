@@ -1,0 +1,145 @@
+--- r2/tests/e2e/ui-regression.mjs
++++ r2.1/tests/e2e/ui-regression.mjs
+@@ -87,7 +87,7 @@
+   report.ui.welcome = []
+   const selectors = ['.welcome-link small', '.welcome-note', '.welcome-note code',
+     '.welcome-step small', '.welcome-footer-note']
+-  for (const size of [13, 17]) {
++  for (const size of [12, 13, 17]) {
+     await setUiSize(page, size)
+     const fonts = {}
+     for (const selector of selectors) {
+@@ -110,7 +110,7 @@
+     report.ui.welcome.push({ size, fonts, colors })
+   }
+   await setUiSize(page, 13)
+-  report.checks.push('UI tokens resolve; welcome helper text scales 13→17px and composed normal/hover contrast is ≥4.5:1')
++  report.checks.push('UI tokens resolve; welcome helper text scales across 12/13/17px and composed normal/hover contrast is ≥4.5:1')
+ }
+ 
+ export async function checkPrimary({ page, output, report }) {
+@@ -182,13 +182,13 @@
+   await page.getByLabel('终端 ANSI 配色').selectOption(prefsBefore.ansi)
+   await page.getByRole('button', { name: '完成', exact: true }).click()
+   await settle(page)
+-  for (const size of [13, 17]) {
++  for (const size of [12, 13, 17]) {
+     await resize(app, page, 1440)
+     await setUiSize(page, size)
+     await terminalTab(page).click()
+     const fonts = {}
+     for (const selector of ['.host-copy strong', '.host-state', '.detail-fields dd',
+-      '.detail-state', '.detail-section small', '.detail-footnote']) {
++      '.detail-state', '.detail-section small', '.detail-footnote', '.pane-name', '.pane-user']) {
+       const value = await styles(page.locator(selector).filter({ visible: true }).first())
+       const minimum = selector === '.host-copy strong' ? size : 12 * size / 13
+       assert.ok(value.fontSize >= minimum - 0.01, selector)
+@@ -225,6 +225,19 @@
+     ]
+     for (const [width, height] of windows) {
+       await resize(app, page, width, height)
++      let restoreSidebarHandleX = null
++      if (size === 17 && width === minSize[0] && height === minSize[1]) {
++        const handle = page.locator('.main-panels > .resize-handle').first()
++        const handleBox = await handle.boundingBox()
++        if (handleBox) {
++          restoreSidebarHandleX = handleBox.x + handleBox.width / 2
++          await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
++          await page.mouse.down()
++          await page.mouse.move(Math.max(90, handleBox.x - 36), handleBox.y + handleBox.height / 2, { steps: 8 })
++          await page.mouse.up()
++          await settle(page)
++        }
++      }
+       const layout = await page.evaluate(() => {
+         const header = document.querySelector('.app-header')
+         const command = document.querySelector('.command-center')
+@@ -236,18 +249,41 @@
+         const actions = selection?.querySelector('.selection-actions')
+         const tabBar = document.querySelector('.tab-bar')
+         const tabActions = document.querySelector('.tab-actions')
++        const paneIdentity = paneHeader?.querySelector('.pane-identity')
++        const paneName = paneHeader?.querySelector('.pane-name')
++        const paneUser = paneHeader?.querySelector('.pane-user')
++        const paneActions = paneHeader?.querySelector('.pane-actions')
+         const children = [...header.children].filter((el) => getComputedStyle(el).display !== 'none')
+           .map((el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right } })
+         const bounds = (el) => el ? (() => { const r = el.getBoundingClientRect(); return {
+           left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height
+         } })() : null
++        const inside = (child, parent, epsilon = 0.5) => child && parent &&
++          child.left >= parent.left - epsilon && child.right <= parent.right + epsilon &&
++          child.top >= parent.top - epsilon && child.bottom <= parent.bottom + epsilon
++        const actionButtons = [...(actions?.querySelectorAll('button') || [])].map((button) => {
++          const buttonBox = button.getBoundingClientRect()
++          const iconBox = button.querySelector('svg')?.getBoundingClientRect()
++          const labelBox = button.querySelector('.selection-action-label')?.getBoundingClientRect()
++          return {
++            ariaLabel: button.getAttribute('aria-label'),
++            text: button.querySelector('.selection-action-label')?.textContent?.trim() || '',
++            box: bounds(button),
++            iconInside: inside(iconBox, buttonBox),
++            labelInside: inside(labelBox, buttonBox),
++            labelWidth: labelBox?.width || 0
++          }
++        })
+         return { viewport: innerWidth, viewportHeight: innerHeight, command: box.width, headerOverflow: header.scrollWidth - header.clientWidth,
+           overflow: document.documentElement.scrollWidth - innerWidth,
+           overlap: children.some((r, i) => i && r.left < children[i - 1].right - 1),
+           right: children.at(-1).right,
+           contextVisible: getComputedStyle(document.querySelector('.command-context')).display !== 'none',
+           activePane: bounds(activePane), paneHeader: bounds(paneHeader), selectedHost: bounds(selectedHost),
+-          selection: bounds(selection), actions: bounds(actions), tabBar: bounds(tabBar), tabActions: bounds(tabActions),
++          selection: bounds(selection), actions: bounds(actions), actionButtons,
++          sidebarWidth: bounds(document.querySelector('.host-sidebar'))?.width || 0,
++          paneIdentity: bounds(paneIdentity), paneName: bounds(paneName), paneUser: bounds(paneUser),
++          paneActions: bounds(paneActions), tabBar: bounds(tabBar), tabActions: bounds(tabActions),
+           terminalToolbarCount: document.querySelectorAll('.terminal-tab-bar .toolbar-actions').length,
+           workspaceToolbarCount: document.querySelectorAll('.workspace-toolbar').length }
+       })
+@@ -259,12 +295,36 @@
+       if (layout.viewport > 900) assert.ok(layout.command > 260)
+       assert.ok(layout.selectedHost?.width > 80 && layout.selectedHost?.height > 0)
+       assert.ok(layout.actions?.bottom <= layout.selection?.bottom + 1, JSON.stringify(layout))
++      assert.equal(layout.actionButtons.length, 3)
++      assert.equal(layout.actionButtons[0].ariaLabel, '新建会话')
++      assert.equal(layout.actionButtons[0].text, '新建')
++      assert.ok(layout.actionButtons.every((button) => button.iconInside && (button.labelWidth === 0 || button.labelInside)), JSON.stringify(layout))
++      assert.ok(layout.actionButtons.every((button, index, buttons) => !index || button.box.left >= buttons[index - 1].box.right - 0.5), JSON.stringify(layout))
+       assert.ok(layout.paneHeader?.height >= 30 && layout.paneHeader?.bottom <= layout.activePane?.bottom + 1)
++      assert.ok(layout.paneName?.top >= layout.paneIdentity?.top - 1 && layout.paneName?.bottom <= layout.paneHeader?.bottom + 1)
++      assert.ok(layout.paneUser?.top >= layout.paneName?.bottom - 1 && layout.paneUser?.bottom <= layout.paneHeader?.bottom + 1)
++      assert.ok(layout.paneActions?.left >= layout.paneIdentity?.right - 1, JSON.stringify(layout))
++      if (size === 17 && width === minSize[0] && height === minSize[1]) assert.ok(layout.paneHeader.height <= 72, JSON.stringify(layout))
+       assert.equal(layout.terminalToolbarCount, 1)
+       assert.equal(layout.workspaceToolbarCount, 0)
+       assert.ok(layout.tabActions?.left >= layout.tabBar?.left)
+       report.ui.windows.push({ size, outerWidth: width, ...layout })
+       await shot(page, output, `window-${width}x${height}-ui-${size}`)
++      if (restoreSidebarHandleX !== null) {
++        const handle = page.locator('.main-panels > .resize-handle').first()
++        const handleBox = await handle.boundingBox()
++        if (handleBox) {
++          await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
++          await page.mouse.down()
++          await page.mouse.move(
++            Math.max(restoreSidebarHandleX, handleBox.x + handleBox.width / 2 + 100),
++            handleBox.y + handleBox.height / 2,
++            { steps: 8 }
++          )
++          await page.mouse.up()
++          await settle(page)
++        }
++      }
+     }
+   }
+   await setUiSize(page, 13)
+@@ -305,7 +365,7 @@
+   await terminalTab(page).click()
+   await row(page, '东京 · 边缘节点 01').click()
+   await setUiSize(page, 13)
+-  report.checks.push('Default/17px host, details, search, quick-open and monospace log fonts; independent xterm preferences; min/900/1280/1440 window layout')
++  report.checks.push('12/13/17px host, details, search, quick-open, pane identity and monospace log fonts; independent xterm preferences; min/900/1280/1440 window layout')
+   report.checks.push('Selection B/session A: both diagnostic entry targets match labels; opened operations and created task snapshots stay fixed after selection changes')
+ }
+ 

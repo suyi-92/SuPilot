@@ -15,7 +15,7 @@
     "build": "pnpm typecheck && pnpm --filter @supilot/desktop build",
     "package:win": "pnpm build && pnpm --filter @supilot/desktop package:win",
     "test": "tsx --test tests/integration/*.test.ts",
-    "test:desktop": "node tests/e2e/desktop.mjs"
+    "test:desktop": "node tests/e2e/simple-flow.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

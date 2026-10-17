@@ -33,7 +33,7 @@ pnpm build
 pnpm package:win
 pnpm test
 pnpm test:desktop
-node tests/e2e/desktop.mjs --packaged
+node tests/e2e/simple-flow.mjs --packaged
 ```
 
 build 包含 typecheck；package:win 包含完整 build，输出 release/win-unpacked/SuPilot.exe 及完整依赖目录。不要单独搬走 exe。应用未签名，没有安装器/更新器。test:desktop 使用构建后的 out，因此先 build；--packaged 使用实际产物，因此先 package:win。
@@ -60,6 +60,14 @@ Electron 首次安装需下载官方二进制；网络受限时配置当前命�
 正式、开发、SUPILOT_TEST=1 分别使用 appData 下 SuPilot、SuPilot-dev、SuPilot-test，再作为 userData 传入 Engine。SQLite 与 SSH 信任均在对应配置目录；不要将真实资产复制到测试配置。
 
 演示为纯内存数据源。集成测试在独立临时目录动态生成密钥和数据库，并显式禁用用户 SSH 配置导入，仅连接本机 127.0.0.1；不会连接用户资产或修改系统 SSH 文件。桌面测试关闭自身会话并删除自身创建的主机，保留测试配置中的任务历史；不触碰正式配置。
+
+## 简化流程迁移验证（2026-10-17）
+
+本轮 Renderer 已从旧多面板工作台迁移到主机 / 终端 / 工具及任务 / 设置的稳定入口。`apps/desktop/src/renderer/app/App.tsx` 负责页面状态和固定目标，`TerminalPane` 由页面外的持久容器承载；`HostForm`、`Operations`、`TasksPage` 和现有 Preload/Engine 协议继续复用。页面切换不会发送 `session.close` 或重新建立会话，编辑页通过统一未保存保护返回来源。
+
+`pnpm test:desktop` 使用 `tests/e2e/simple-flow.mjs`，实际启动开发 Electron 和本机 OpenSSH 回环夹具；`node tests/e2e/simple-flow.mjs --packaged` 启动本次 `pnpm package:win` 生成的 `release/win-unpacked/SuPilot.exe`。两套报告均覆盖：启动主机页、设置偏好、真实指纹核对、SSH/xterm 输出、双窗格、跨页会话保留、诊断四项任务、任务浮层/结果页、独立编辑页草稿和未保存离页保护。截图和 JSON 报告写入 `.local/Test/ux-migration/`。
+
+本轮实际结果：`pnpm typecheck`、`pnpm build`、`pnpm test`（11/11）、开发版 `test:desktop`（6 项流程断言）和打包版 `simple-flow.mjs --packaged`（6 项流程断言）通过。未在本轮验证真实 VPS、Windows 中文 IME 候选选择、系统 DPI 跨屏切换以及安装器安装/升级/卸载；win-unpacked 通过不等于安装器流程通过。
 
 ## 本轮验证（2026-10-16）
 
@@ -97,7 +105,7 @@ UI 2.1 局部收尾的桌面回归输出位于 `.local/Test/ui-round2.1/`：850�
 
 只修改 Renderer 的表单错误上下文、欢迎页首次快照结果与摘要色彩语义。真实 HostInput 未改；Agent 切换不丢失路径值，对仍有效的路径错误保留修正入口。首次读取失败不再判断无主机或缺少 OpenSSH，订阅的新快照不被较早请求覆盖。部分不可用摘要使用 warning，但真实任务 state 和 Status 保持原值。受限高度的表单为固定保存区预留滚动空间，避免高级字段帮助文字被挡住。
 
-验证输出位于 `.local/Test/ui-round3.1/`，交付包位于 `.local/Test/ui-round3.1-delivery/`。`node tests/e2e/ui-round31.mjs` 挂载真实 App/CSS 和隔离合成 API，覆盖罕见状态、保存/复制失败与 48 行页面矩阵；合成测试不经过 Engine 或 IPC。`pnpm test:desktop` 与新构建后的 `node tests/e2e/desktop.mjs --packaged` 另外执行四页面矩阵和全部原有真实回环、目标、焦点、ANSI、IPC 回归。没有用合成结果替代 Windows 应用验证。
+历史 3.1 验证输出仍位于 `.local/Test/ui-round3.1/`。当前简化流程使用 `tests/e2e/simple-flow.mjs`，不把旧工作台选择器作为正式入口；必要的 HostForm、任务状态、目标快照、IPC 和回环断言继续由集成测试及本脚本覆盖。没有用合成结果替代 Windows 应用验证。
 
 `pnpm test` 现在有 11 项，包括真实 HostInput 的端口、字符串、标签、用户名及路径限制，首次快照展示状态和全部任务结果语义。测试脚本使用现有依赖；未增加框架。源码包由当前工作文件逐项读取，包含既有未提交修改和新增测试，不从 HEAD 导出。
 

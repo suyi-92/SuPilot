@@ -1,0 +1,67 @@
+--- r2/apps/desktop/src/renderer/app/style.css
++++ r2.1/apps/desktop/src/renderer/app/style.css
+@@ -295,11 +295,21 @@
+   gap: 3px;
+ }
+ .selection-actions .button {
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 4px;
+   font-size: 0.92308rem;
+   padding: 3px 7px;
+   min-width: 0;
+-  overflow: hidden;
+-  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++.selection-actions .button > svg {
++  flex: 0 0 auto;
++}
++.selection-action-label {
++  min-width: 0;
++  white-space: nowrap;
+ }
+ .sidebar-bottom {
+   border-top: 1px solid var(--border-soft);
+@@ -516,13 +526,18 @@
+ .pane-identity .truncate {
+   min-width: 0;
+ }
++.pane-name {
++  color: var(--foreground);
++  font-size: 1rem;
++  font-weight: 500;
++}
+ .pane-header .icon-button {
+   width: 23px;
+   height: 23px;
+ }
+ .pane-user {
+   color: var(--subtle-foreground);
+-  font-size: 0.92308rem;
++  font: 0.92308rem/1.25 var(--mono-font);
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+@@ -2289,12 +2304,17 @@
+ }
+ @container (max-width: 360px) {
+   .pane-header {
+-    grid-template-columns: minmax(0, 1fr);
+-    gap: 2px;
+-    padding: 5px 8px;
++    grid-template-columns: minmax(0, 1fr) auto;
++    gap: 4px;
++    padding: 5px 6px 5px 8px;
++  }
++  .pane-identity {
++    column-gap: 6px;
++    row-gap: 2px;
+   }
+   .pane-actions {
+     justify-content: flex-end;
++    gap: 3px;
+   }
+   .pane-actions > .demo-label,
+   .pane-actions > .status {
