@@ -14,4 +14,6 @@ Tasks.tsx 提供任务历史、状态/主机筛选、步骤、只读输出、日
 
 正式源码与说明由 SuPilot 独立仓库跟踪；生成产物和本机材料遵守项目忽略规则。
 
+结果摘要只解释现有状态与真实步骤计数，不推测服务器健康。摘要边线和图标按 summary tone 使用现有主题 token；总体 succeeded 且部分 unavailable 时显示 warning，总体 Status 仍保持真实成功状态。取消请求、已取消、中断和未知分别表达。
+
 完整规则见 [AGENTS.md](../../../../../../AGENTS.md)，目录索引见 [directory-map.md](../../../../../../docs/directory-map.md)。

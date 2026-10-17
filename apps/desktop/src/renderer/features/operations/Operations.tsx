@@ -69,16 +69,20 @@ export function Operations({
         </div>
         {available ? (
           <>
-            <h2 className="section-heading">
-              本次检查 <span>4 项 · 独立 SSH 通道</span>
-            </h2>
+            <section className="operation-scope" aria-labelledby="diagnostic-scope-title">
+              <div className="section-heading">
+                <h2 id="diagnostic-scope-title">检查范围</h2>
+                <span>固定四项 · 不可单独选择</span>
+              </div>
+              <p className="section-lead">本次只读取系统与内核、运行时间、磁盘使用和内存信息。</p>
+            </section>
             <div className="check-list">
               {[
-                [Cpu, '系统与内核', '发行版、内核版本与处理器架构', '/etc/os-release · uname'],
-                [Clock3, '运行时间', '开机时间与系统负载', 'uptime · /proc/uptime'],
-                [HardDrive, '磁盘使用', '挂载点、容量与可用空间', 'df -Pk'],
-                [Activity, '内存信息', '总内存、可用内存与交换空间', '/proc/meminfo · free']
-              ].map(([Icon, title, description, command], i) => {
+                [Cpu, '系统与内核', '发行版、内核版本与处理器架构'],
+                [Clock3, '运行时间', '开机时间与系统负载'],
+                [HardDrive, '磁盘使用', '挂载点、容量与可用空间'],
+                [Activity, '内存信息', '总内存、可用内存与交换空间']
+              ].map(([Icon, title, description], i) => {
                 const Glyph = Icon as typeof Cpu
                 return (
                   <div className="check-row" key={String(title)}>
@@ -88,7 +92,6 @@ export function Operations({
                       <strong>{String(title)}</strong>
                       <p>{String(description)}</p>
                     </div>
-                    <code>{String(command)}</code>
                   </div>
                 )
               })}
@@ -98,7 +101,7 @@ export function Operations({
                 <ShieldCheck size={18} />
                 <div>
                   <strong>独立执行，不影响终端输入</strong>
-                  <p>4 项只读查询，不修改远端配置。</p>
+                  <p>四项只读查询，不向当前终端输入命令，也不修改远端配置。</p>
                 </div>
               </div>
               <div>
@@ -110,15 +113,21 @@ export function Operations({
               </div>
             </div>
             <details className="execution-details">
-              <summary>执行限制与结果说明</summary>
-              <p>
-                每项通过独立 SSH 连接执行，单项超时 20 秒，输出最多 128
-                KiB。缺少工具时标记为不可用；连接中断或结果不完整会明确记录，不推断执行成功。
-              </p>
+              <summary>技术细节与执行限制</summary>
+              <div className="execution-detail-grid">
+                <div>
+                  <strong>实际命令</strong>
+                  <code>/etc/os-release · uname · uptime · /proc/uptime · df -Pk · /proc/meminfo · free</code>
+                </div>
+                <div>
+                  <strong>执行约束</strong>
+                  <p>每项通过独立 SSH 连接执行，单项超时 20 秒，输出最多 128 KiB。缺少工具时标记为不可用；连接中断或结果不完整会明确记录，不推断执行成功。</p>
+                </div>
+              </div>
             </details>
             <div className="operation-footer">
               <span className="muted">
-                {host ? '4 项检查 · 结果自动保存' : '请先选择主机，再从详情中打开诊断'}
+                {host ? '只读结果自动保存到任务记录' : '请先选择主机，再从详情中打开诊断'}
               </span>
               <Button variant="primary" disabled={!host || busy} onClick={onRun}>
                 <Play size={15} />

@@ -5,10 +5,11 @@ import { resolve, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { createSSHFixture } from '../fixtures/ssh-server.mjs'
 import { checkWelcome, checkPrimary, checkWorkbench, checkTerminalFocus } from './ui-regression.mjs'
+import { checkPageMatrix } from './page-matrix.mjs'
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
 const packaged = process.argv.includes('--packaged')
-const output = join(root, '.local/Test/ui-round2', `${packaged ? 'packaged' : 'desktop'}-${Date.now()}`)
+const output = join(root, '.local/Test/ui-round3.1', `${packaged ? 'packaged' : 'desktop'}-${Date.now()}`)
 await mkdir(output, { recursive: true })
 const executablePath = packaged
   ? join(root, 'release/win-unpacked/SuPilot.exe')
@@ -65,6 +66,7 @@ try {
   await page.getByRole('button', { name: '完成', exact: true }).click()
   await page.screenshot({ path: join(output, 'welcome.png') })
   await checkWelcome({ page, app, output, report, root })
+  await checkPageMatrix({ page, app, output, report }, 'welcome')
   const initial = await page.evaluate(() => window.supilot.request({ type: 'snapshot' }))
   assert.match(initial.dataPath, /SuPilot-test$/)
   assert.equal(initial.engineError, undefined)
@@ -107,6 +109,7 @@ try {
   const name = `本地持久化验证-${Date.now()}`
   await page.getByRole('button', { name: '添加主机', exact: true }).first().click()
   await checkPrimary({ page, app, output, report })
+  await checkPageMatrix({ page, app, output, report }, 'form')
   assert.equal(
     await page.getByRole('button', { name: '保存主机', exact: true }).evaluate((el) => {
       const box = el.getBoundingClientRect()
@@ -135,7 +138,26 @@ try {
   await page.getByRole('button', { name: '返回', exact: true }).click()
   await page.getByLabel('主机地址', { exact: true }).fill('192.0.2.250')
   await page.getByLabel('公网连接端口').fill('22022')
+  await page.locator('.form-advanced summary').click()
+  await page.getByLabel('远端 sshd 监听端口（可选）').fill('0')
+  await page.locator('.form-advanced summary').click()
+  await page.getByRole('button', { name: '保存主机', exact: true }).click()
+  await page.getByRole('button', { name: /远端监听端口/ }).waitFor()
+  assert.equal(await page.locator('.form-advanced[open]').count(), 1)
   await page.getByLabel('远端 sshd 监听端口（可选）').fill('22')
+  await page.getByLabel('已有私钥文件').check()
+  await page.getByLabel('私钥文件路径').fill('relative-key')
+  await page.getByRole('button', { name: '保存主机', exact: true }).click()
+  assert.match(await page.locator('.form-error-summary').innerText(), /绝对路径/)
+  await page.screenshot({ path: join(output, 'host-form-key-error.png') })
+  await page.getByLabel('SSH Agent').check()
+  assert.equal(
+    await page.getByRole('button', { name: /私钥文件路径/ }).count(),
+    0,
+    'Switching to SSH Agent removes the hidden key-path error link'
+  )
+  assert.equal(await page.getByLabel('私钥文件路径').count(), 0)
+  await page.screenshot({ path: join(output, 'host-form-agent-after-key-error.png') })
   await page.getByLabel('分组', { exact: true }).fill('E2E 合成数据')
   await page.screenshot({ path: join(output, 'host-form.png') })
   await page.getByRole('button', { name: '保存主机', exact: true }).click()
@@ -206,9 +228,20 @@ try {
   await page.getByRole('button', { name: '左右分屏', exact: true }).click()
   await page.getByRole('button', { name: /^系统诊断 · 列表选中主机/ }).click()
   await page.getByRole('heading', { name: '系统诊断', exact: true }).waitFor()
+  assert.match(await page.locator('.target-strip').innerText(), /固定检查目标/)
+  assert.equal(await page.locator('.check-row').count(), 4)
+  assert.equal(await page.locator('.execution-details[open]').count(), 0)
+  await checkPageMatrix({ page, app, output, report }, 'diagnostic')
   await page.screenshot({ path: join(output, 'operation.png') })
+  await page.locator('.execution-details summary').click()
+  assert.match(await page.locator('.execution-details').innerText(), /实际命令/)
+  await page.screenshot({ path: join(output, 'operation-details.png') })
   await page.getByRole('button', { name: '运行演示诊断', exact: true }).click()
   await page.locator('.task-detail').waitFor()
+  assert.match(await page.locator('.result-message').innerText(), /已完成|正在|结果|失败|不可用/)
+  assert.match(await page.locator('.task-meta').innerText(), /成功 .* 共/)
+  await checkPageMatrix({ page, app, output, report }, 'tasks')
+  report.checks.push('Four actual pages: 48 window/font rows with DOM Range text, SVG, neighboring controls, occlusion, footer, contrast and exact sidebar restoration checks')
   await page.screenshot({ path: join(output, 'tasks.png') })
   await page.getByLabel('筛选任务').filter({ visible: true }).selectOption('attention')
   await page.waitForFunction(() =>
@@ -216,6 +249,9 @@ try {
   )
   assert.match(await page.locator('.detail-identity h3').innerText(), /香港/)
   await page.screenshot({ path: join(output, 'task-failed.png') })
+  await page.locator('.history-list > button').filter({ hasText: '法兰克福' }).click()
+  assert.match(await page.locator('.result-message').innerText(), /结果未知/)
+  await page.screenshot({ path: join(output, 'task-unknown.png') })
   await page.getByRole('button', { name: '自动换行', exact: true }).click()
   assert.equal(
     await page.getByLabel('只读诊断日志').evaluate((el) => getComputedStyle(el).whiteSpace),
@@ -390,6 +426,35 @@ try {
   )
   await checkTerminalFocus({ page, app, output, report })
   const terminal = page.locator('.xterm-helper-textarea').first()
+  const ansiPalette = {
+    'dark-plus': { red: 'rgb(205, 49, 49)', green: 'rgb(13, 188, 121)', blue: 'rgb(36, 114, 200)' },
+    graphite: { red: 'rgb(231, 136, 142)', green: 'rgb(125, 206, 176)', blue: 'rgb(122, 165, 245)' },
+    classic: { red: 'rgb(255, 117, 127)', green: 'rgb(145, 207, 123)', blue: 'rgb(130, 170, 255)' }
+  }
+  const renderedAnsi = []
+  for (const ansi of Object.keys(ansiPalette)) {
+    await page.getByLabel('界面与终端设置', { exact: true }).click()
+    await page.getByLabel('终端 ANSI 配色').selectOption(ansi)
+    await page.getByRole('button', { name: '完成', exact: true }).click()
+    await terminal.focus()
+    await page.keyboard.insertText('ansi-sample')
+    await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent.includes('ANSI_BLUE'))
+    const colors = await page.locator('.xterm-rows span').evaluateAll((spans) => {
+      const find = (text) => {
+        const span = spans.find((candidate) => candidate.textContent?.includes(text))
+        return span ? getComputedStyle(span).color : null
+      }
+      return { red: find('ANSI_RED'), green: find('ANSI_GREEN'), blue: find('ANSI_BLUE') }
+    })
+    assert.deepEqual(colors, ansiPalette[ansi], `Rendered ANSI palette matches ${ansi}`)
+    renderedAnsi.push({ ansi, colors })
+    await page.screenshot({ path: join(output, `terminal-ansi-${ansi}.png`) })
+  }
+  await page.getByLabel('界面与终端设置', { exact: true }).click()
+  await page.getByLabel('终端 ANSI 配色').selectOption('dark-plus')
+  await page.getByRole('button', { name: '完成', exact: true }).click()
+  report.ui.ansiRendered = renderedAnsi
+  report.checks.push('Real loopback xterm renders controlled 16-color ANSI samples for Dark+, Graphite and Classic with matching screenshots')
   await terminal.focus()
   await page.keyboard.insertText('中文端到端输入')
   await page.keyboard.press('Control+c')

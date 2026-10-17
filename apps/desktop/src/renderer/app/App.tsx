@@ -55,6 +55,7 @@ import { Operations } from '../features/operations/Operations'
 import { TasksPage, time } from '../features/tasks/Tasks'
 import { QuickOpen } from './QuickOpen'
 import { endpoint } from './format'
+import { snapshotLoadState } from './snapshotState'
 
 declare global {
   interface Window {
@@ -86,12 +87,15 @@ const empty: Snapshot = {
   sshAvailable: false,
   dataPath: ''
 }
+
 export function App() {
   const ui = useUI()
   const [real, setReal] = useState<Snapshot>(empty)
   const [demo, setDemo] = useState(false)
   const [sample, setSample] = useState<Snapshot>(demoSnapshot)
   const [loading, setLoading] = useState(true)
+  const [snapshotReady, setSnapshotReady] = useState(false)
+  const [snapshotError, setSnapshotError] = useState<string>()
   const [tabs, setTabs] = useState<Tab[]>([])
   const [active, setActive] = useState('')
   const [selectedHost, setSelectedHost] = useState('')
@@ -143,6 +147,8 @@ export function App() {
     ['failed', 'unknown', 'interrupted'].includes(t.state)
   ).length
   const detailsVisible = !ui.focus && (narrow ? detailsPeek : ui.details)
+  const welcomeHost = data.hosts.find((host) => host.id === selectedHost) || data.hosts[0]
+  const loadState = snapshotLoadState(loading, snapshotReady, snapshotError)
   const report = (message: string, kind: 'error' | 'success' = 'error') =>
     setToast({
       message: message.replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, ''),
@@ -158,13 +164,31 @@ export function App() {
     return () => media.removeEventListener('change', change)
   }, [])
   useEffect(() => {
-    const off = window.supilot.subscribe(setReal)
+    let mounted = true
+    let subscribedSnapshot = false
+    const acceptSnapshot = (snapshot: Snapshot) => {
+      if (!mounted) return
+      setReal(snapshot)
+      setSnapshotReady(true)
+      setSnapshotError(undefined)
+      setLoading(false)
+    }
+    const off = window.supilot.subscribe((snapshot) => {
+      subscribedSnapshot = true
+      acceptSnapshot(snapshot)
+    })
     void window.supilot
       .request({ type: 'snapshot' })
-      .then(setReal)
-      .catch((e) => report(String(e)))
-      .finally(() => setLoading(false))
-    return off
+      .then((snapshot) => {
+        if (!subscribedSnapshot) acceptSnapshot(snapshot)
+      })
+      .catch((e) => {
+        if (mounted && !subscribedSnapshot) {
+          setSnapshotError(String(e))
+          setLoading(false)
+        }
+      })
+    return () => { mounted = false; off() }
   }, [])
   useEffect(() => {
     if (!demo && !selectedHost && real.hosts.length) {
@@ -817,9 +841,14 @@ export function App() {
                             </span>
                           </div>
                           <div className="selection-actions">
-                            <Button disabled={busy} onClick={() => openHost(selected, true)}>
+                            <Button
+                              aria-label="新建会话"
+                              title="新建会话"
+                              disabled={busy}
+                              onClick={() => openHost(selected, true)}
+                            >
                               <Plus size={13} />
-                              新建会话
+                              <span className="selection-action-label">新建</span>
                             </Button>
                             <IconButton label="编辑选中主机" onClick={() => openEditor(selected)}>
                               <Edit3 size={15} />
@@ -1034,90 +1063,119 @@ export function App() {
                       <div className="welcome-inner">
                         <div className="welcome-eyebrow">
                           <Compass size={14} aria-hidden="true" />
-                          <span>本地工作区</span>
-                          <span className="welcome-divider">/</span>
-                          <span>终端优先的主机工作台</span>
+                          <span>{demo ? '演示工作区' : '本地工作区'}</span>
                         </div>
                         <div className="welcome-heading">
-                          <div className="welcome-mark" aria-hidden="true">
-                            <TerminalSquare size={26} />
-                          </div>
                           <div>
                             <h1>开始使用 SuPilot</h1>
-                            <p className="welcome-subtitle">连接主机，打开终端，在同一个工作区完成诊断。</p>
+                            <p className="welcome-subtitle">连接主机、打开终端，并在同一个工作区查看只读诊断结果。</p>
                           </div>
                         </div>
-                        <div className="welcome-columns">
-                          <section className="welcome-start">
-                            <div className="welcome-section-heading">
-                              <span className="welcome-section-index">01</span>
-                              <h2>打开工作区</h2>
+                        {loadState === 'loading' && !demo ? (
+                          <div className="welcome-state welcome-state-loading" role="status">
+                            <LoaderCircle className="spin" size={16} />
+                            <span>正在加载本机工作区…</span>
+                          </div>
+                        ) : loadState === 'error' && !demo ? (
+                          <div className="welcome-state welcome-state-error" role="alert">
+                            <AlertCircle size={16} />
+                            <div>
+                              <strong>本机工作区暂时无法读取</strong>
+                              <p>{snapshotError}</p>
+                              <small>当前没有足够信息判断主机数量或 OpenSSH 状态；可以填写档案或查看演示工作区。</small>
+                              <div className="welcome-actions">
+                                <Button variant="primary" onClick={() => openEditor()}>
+                                  <Plus size={15} />
+                                  添加主机
+                                </Button>
+                                <Button onClick={() => toggleDemo()}>
+                                  <FlaskConical size={15} />
+                                  探索演示工作区
+                                </Button>
+                              </div>
                             </div>
-                            <button className="welcome-link" onClick={() => openEditor()}>
-                              <Plus size={16} />
-                              <span>
-                                <strong>添加主机</strong>
-                                <small>保存连接地址与认证引用</small>
-                              </span>
-                              <ArrowRight size={14} />
-                            </button>
-                            <button className="welcome-link" onClick={() => toggleDemo()}>
-                              <FlaskConical size={16} />
-                              <span>
-                                <strong>探索演示工作区</strong>
-                                <small>查看多主机、分屏与任务记录</small>
-                              </span>
-                              <ArrowRight size={14} />
-                            </button>
-                            <button className="welcome-link" onClick={() => setSettings(true)}>
-                              <Settings2 size={16} />
-                              <span>
-                                <strong>调整界面与终端</strong>
-                                <small>字号、ANSI 配色与快捷键</small>
-                              </span>
-                              <ArrowRight size={14} />
-                            </button>
-                            <p className="welcome-note">
-                              主机数据保存在本机。启动时会读取 <code>~/.ssh/config</code>，连接使用系统 OpenSSH。
-                            </p>
+                          </div>
+                        ) : loadState === 'ready' && real.engineError && !demo ? (
+                          <div className="welcome-state welcome-state-error" role="alert">
+                            <AlertCircle size={16} />
+                            <div>
+                              <strong>本机工作区加载失败</strong>
+                              <p>{real.engineError}</p>
+                              <small>仍可填写主机档案或进入演示工作区；不会把未加载的数据显示为零主机。</small>
+                              <div className="welcome-actions">
+                                <Button variant="primary" onClick={() => openEditor()}><Plus size={15} />添加主机</Button>
+                                <Button onClick={() => toggleDemo()}><FlaskConical size={15} />探索演示工作区</Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : loadState === 'ready' && !demo && !real.sshAvailable ? (
+                          <div className="welcome-state welcome-state-error" role="alert">
+                            <AlertCircle size={16} />
+                            <div>
+                              <strong>系统 OpenSSH 不可用</strong>
+                              <p>可继续填写主机档案或查看演示工作区；连接前请在 Windows 可选功能中安装 OpenSSH 客户端。</p>
+                            </div>
+                          </div>
+                        ) : null}
+                        {loadState === 'ready' && !real.engineError && real.hosts.length > 0 && !demo ? (
+                          <section className="welcome-entry welcome-entry-existing" aria-labelledby="welcome-existing-title">
+                            <div>
+                              <span className="welcome-kicker">已有主机</span>
+                              <h2 id="welcome-existing-title">继续处理已有主机</h2>
+                              <p>{welcomeHost ? `当前选中：${welcomeHost.name}` : '从主机列表或快速打开中选择目标。'}</p>
+                            </div>
+                            <div className="welcome-actions">
+                              <Button variant="primary" onClick={() => setQuickOpen(true)}>
+                                <Search size={15} />
+                                快速打开主机
+                                <ArrowRight size={15} />
+                              </Button>
+                              <Button onClick={() => openEditor()}>
+                                <Plus size={15} />
+                                添加主机
+                              </Button>
+                            </div>
                           </section>
-                          <section className="welcome-guide">
-                            <div className="welcome-section-heading">
-                              <span className="welcome-section-index">02</span>
-                              <h2>日常操作</h2>
+                        ) : loadState === 'ready' && !real.engineError && !demo ? (
+                          <section className="welcome-entry welcome-entry-first" aria-labelledby="welcome-first-title">
+                            <div>
+                              <span className="welcome-kicker">首次使用</span>
+                              <h2 id="welcome-first-title">先添加一台主机</h2>
+                              <p>填写名称、地址、连接端口、用户名和认证方式即可保存档案。</p>
                             </div>
-                            <div className="welcome-step">
-                              <span>1</span>
-                              <p><strong>添加连接</strong><small>主机、端口、用户和密钥引用会固定到档案。</small></p>
-                            </div>
-                            <div className="welcome-step">
-                              <span>2</span>
-                              <p><strong>打开终端</strong><small>双击主机，核对指纹后建立真实 SSH 会话。</small></p>
-                            </div>
-                            <div className="welcome-step">
-                              <span>3</span>
-                              <p><strong>运行诊断</strong><small>独立执行只读检查，结果会保存到任务记录。</small></p>
+                            <div className="welcome-actions">
+                              <Button variant="primary" onClick={() => openEditor()}>
+                                <Plus size={15} />
+                                添加主机
+                                <ArrowRight size={15} />
+                              </Button>
+                              <Button onClick={() => toggleDemo()}>
+                                <FlaskConical size={15} />
+                                探索演示工作区
+                              </Button>
                             </div>
                           </section>
-                        </div>
+                        ) : null}
+                        <section className="welcome-guide" aria-labelledby="welcome-guide-title">
+                          <div className="welcome-section-heading">
+                            <h2 id="welcome-guide-title">开始后</h2>
+                            <span>三步了解工作区</span>
+                          </div>
+                          <div className="welcome-steps">
+                            <div className="welcome-step"><strong>添加或选择主机</strong><small>档案会固定连接信息和认证引用。</small></div>
+                            <div className="welcome-step"><strong>打开终端</strong><small>核对指纹后建立真实 SSH 会话。</small></div>
+                            <div className="welcome-step"><strong>运行只读诊断</strong><small>结果保存到任务记录，状态按实际回报展示。</small></div>
+                          </div>
+                        </section>
                         <div className="welcome-footer-note">
                           <ShieldCheck size={14} />
-                          <span>不会修改系统 SSH 配置或用户私钥。</span>
+                          <span>主机数据保存在本机；启动时只读发现 SSH 配置，不修改系统 SSH 配置或用户私钥。</span>
+                          <button className="welcome-settings" onClick={() => setSettings(true)}>
+                            <Settings2 size={13} /> 设置
+                          </button>
                           <span className="welcome-shortcut"><Keyboard size={13} /> Ctrl+K 快速打开</span>
                         </div>
                       </div>
-                      {loading ? (
-                        <p className="muted">
-                          <LoaderCircle className="spin" size={15} /> 正在加载本机工作区…
-                        </p>
-                      ) : (
-                        !real.sshAvailable &&
-                        !demo && (
-                          <p className="error">
-                            系统 OpenSSH 不可用。请在 Windows 可选功能中安装 OpenSSH 客户端并重启。
-                          </p>
-                        )
-                      )}
                     </div>
                   )}
                 </div>

@@ -8,6 +8,100 @@ export const draftOf = (host: Host): HostDraft => {
   const { updatedAt, ...draft } = host
   return draft
 }
+
+export type ValidationIssue = {
+  path: PropertyKey[]
+  code: string
+  message: string
+  expected?: string
+  minimum?: number | bigint
+  maximum?: number | bigint
+  origin?: string
+}
+
+const fieldLabels: Record<string, string> = {
+  name: '主机名称',
+  address: '主机地址',
+  port: '公网连接端口',
+  sshdPort: '远端监听端口',
+  username: '用户名',
+  group: '分组',
+  keyPath: '私钥文件路径',
+  tags: '标签',
+  notes: '备注',
+  form: '保存失败'
+}
+
+const portMessage = (label: string) => `${label}必须是 1–65535 之间的整数`
+
+export function formatHostIssues(
+  issues: readonly ValidationIssue[],
+  form: HostDraft,
+  absolutePathIssue?: ValidationIssue
+) {
+  const result: Record<string, string> = {}
+  for (const issue of issues) {
+    const first = issue.path[0]
+    const key = typeof first === 'string' ? first : issue === absolutePathIssue ? 'keyPath' : 'form'
+    const label = fieldLabels[key] || '输入'
+    let message = issue.message
+    if (key === 'port' || key === 'sshdPort') {
+      if (issue.code === 'invalid_type' && issue.expected === 'int') message = portMessage(label)
+      else if (issue.code === 'invalid_type') message = `${label}必须是数字，范围为 1–65535`
+      else if (issue.code === 'too_small' || issue.code === 'too_big') message = portMessage(label)
+    } else if (key === 'tags' && typeof issue.path[1] === 'number') {
+      if (issue.code === 'too_big') message = `第 ${issue.path[1] + 1} 个标签最多 ${issue.maximum} 个字符`
+      else if (issue.code === 'too_small') message = `第 ${issue.path[1] + 1} 个标签不能为空`
+    } else if (key === 'tags' && issue.code === 'too_big' && issue.origin === 'array') {
+      message = `标签最多 ${issue.maximum} 个，请减少标签数量`
+    } else if (issue.code === 'invalid_type' && issue.expected === 'int') {
+      message = `${label}必须是整数`
+    } else if (issue.code === 'invalid_type') {
+      message = `${label}不能为空`
+    } else if (issue.code === 'too_small') {
+      message = `${label}不能为空`
+    } else if (issue.code === 'too_big') {
+      message = issue.origin === 'string' ? `${label}最多 ${issue.maximum} 个字符` : issue.message
+    } else if (issue.code === 'invalid_value') message = '请选择 SSH Agent 或已有私钥文件'
+    else if (issue.code === 'invalid_format' && key === 'address') {
+      message = '请输入域名、IPv4 或不带方括号的 IPv6 地址'
+    } else if (issue.code === 'invalid_format' && key === 'username') {
+      message = '用户名须以字母、数字或下划线开头，只能包含字母、数字、点、下划线、连字符或 @'
+    } else if (issue.code === 'custom' && key === 'keyPath' && issue.path.length > 0 && /[\r\n\0]/.test(form.keyPath)) {
+      message = '私钥文件路径不能包含换行或空字符'
+    } else if (issue === absolutePathIssue) {
+      message = '私钥文件路径必须是绝对路径（仅检查格式，不读取文件）'
+    }
+    result[key] = result[key] ? `${result[key]}；${message}` : message
+  }
+  return result
+}
+
+export function validateHostDraft(form: HostDraft) {
+  const parsed = HostInput.safeParse(form)
+  let absolutePathIssue: ValidationIssue | undefined
+  if (!parsed.success && form.auth === 'key') {
+    // Attribute only the actual schema issue removed by changing authentication.
+    // Unknown caller-provided root issues never become links to keyPath.
+    const roots = parsed.error.issues.filter((issue) => issue.path.length === 0)
+    const agent = HostInput.safeParse({ ...form, auth: 'agent' })
+    if (roots.length === 1 && roots[0].code === 'custom' &&
+        (agent.success || !agent.error.issues.some((issue) => issue.path.length === 0))) {
+      absolutePathIssue = roots[0]
+    }
+  }
+  return { parsed, errors: parsed.success ? {} : formatHostIssues(parsed.error.issues, form, absolutePathIssue) }
+}
+
+const tagsFromText = (value: string) => [
+  ...new Set(
+    value
+      .split(/[,，]/)
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  )
+]
+
 export function HostForm({
   host,
   demo,
@@ -40,6 +134,8 @@ export function HostForm({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tagsText, setTagsText] = useState(host?.tags.join(', ') || '')
   const [busy, setBusy] = useState(false)
+  const saving = useRef(false)
+  const [advancedOpen, setAdvancedOpen] = useState(Boolean(host?.sshdPort))
   const prefix = useId()
   const summary = useRef<HTMLDivElement>(null)
   const baseline = useRef(JSON.stringify({ form, tagsText }))
@@ -52,23 +148,19 @@ export function HostForm({
     'aria-invalid': !!errors[key],
     'aria-describedby': `${prefix}-${key}-help`
   })
-  const errorLabels: Record<string, string> = {
-    name: '主机名称',
-    address: '主机地址',
-    port: '公网连接端口',
-    sshdPort: '远端监听端口',
-    username: '用户名',
-    group: '分组',
-    keyPath: '私钥文件路径',
-    tags: '标签',
-    notes: '备注',
-    form: '保存失败'
-  }
+  const errorLabels = fieldLabels
   const update = <K extends keyof HostDraft>(key: K, value: HostDraft[K]) => {
-    setForm((v) => ({ ...v, [key]: value }))
+    const nextForm = { ...form, [key]: value }
+    setForm(nextForm)
     setErrors((v) => {
       const next = { ...v }
       delete next[key]
+      if ((key === 'auth' && value === 'agent') ||
+          (key === 'keyPath' && nextForm.auth === 'agent' && v.keyPath)) {
+        const applicable = validateHostDraft({ ...nextForm, tags: tagsFromText(tagsText) }).errors
+        if (applicable.keyPath) next.keyPath = applicable.keyPath
+        else delete next.keyPath
+      }
       return next
     })
   }
@@ -101,27 +193,19 @@ export function HostForm({
           noValidate
           onSubmit={async (e) => {
             e.preventDefault()
-            const parsed = HostInput.safeParse({
+            if (saving.current) return
+            const { parsed, errors: nextErrors } = validateHostDraft({
               ...form,
-              tags: [
-                ...new Set(
-                  tagsText
-                    .split(/[,，]/)
-                    .map((t) => t.trim())
-                    .filter(Boolean)
-                )
-              ]
+              tags: tagsFromText(tagsText)
             })
             if (!parsed.success) {
-              setErrors(
-                Object.fromEntries(
-                  parsed.error.issues.map((i) => [String(i.path[0] || 'form'), i.message])
-                )
-              )
+              setErrors(nextErrors)
+              if (nextErrors.sshdPort) setAdvancedOpen(true)
               requestAnimationFrame(() => summary.current?.focus())
               return
             }
             setErrors({})
+            saving.current = true
             setBusy(true)
             try {
               await onSave(parsed.data)
@@ -129,6 +213,7 @@ export function HostForm({
               setErrors({ form: String(error) })
               requestAnimationFrame(() => summary.current?.focus())
             } finally {
+              saving.current = false
               setBusy(false)
             }
           }}
@@ -137,21 +222,32 @@ export function HostForm({
             <div className="form-error-summary" ref={summary} tabIndex={-1} role="alert">
               <strong>
                 <AlertCircle size={16} />
-                请检查以下内容
+                请检查以下内容（{Object.keys(errors).length} 项）
               </strong>
               {Object.entries(errors).map(([key, value]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => document.getElementById(`${prefix}-${key}`)?.focus()}
-                >
-                  {errorLabels[key] || key}：{value}
-                </button>
+                !['name', 'address', 'port', 'sshdPort', 'username', 'group', 'keyPath', 'tags', 'notes'].includes(key) ? (
+                  <p key={key}>{errorLabels[key]}：{value}</p>
+                ) : (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      if (key === 'sshdPort') setAdvancedOpen(true)
+                      requestAnimationFrame(() => {
+                        const input = document.getElementById(`${prefix}-${key}`)
+                        input?.focus({ preventScroll: true })
+                        input?.scrollIntoView({ block: 'center' })
+                      })
+                    }}
+                  >
+                    {errorLabels[key] || key}：{value}
+                  </button>
+                )
               ))}
             </div>
           )}
           <section className="form-section">
-            <h2>连接目标</h2>
+            <h2>连接信息</h2>
             <div className="form-grid">
               {field(
                 'name',
@@ -192,22 +288,6 @@ export function HostForm({
                 'SuPilot 实际连接的端口，可与 NAT 内部端口不同。'
               )}
               {field(
-                'sshdPort',
-                '远端 sshd 监听端口（可选）',
-                <input
-                  {...fieldProps('sshdPort')}
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={form.sshdPort ?? ''}
-                  onChange={(e) =>
-                    update('sshdPort', e.target.value ? Number(e.target.value) : null)
-                  }
-                  placeholder="未知时留空"
-                />,
-                '仅作档案记录，不据此修改远端配置。'
-              )}
-              {field(
                 'username',
                 '用户名',
                 <input
@@ -215,17 +295,6 @@ export function HostForm({
                   required
                   value={form.username}
                   onChange={(e) => update('username', e.target.value)}
-                />
-              )}
-              {field(
-                'group',
-                '分组',
-                <input
-                  {...fieldProps('group')}
-                  value={form.group}
-                  maxLength={60}
-                  onChange={(e) => update('group', e.target.value)}
-                  placeholder="例如：生产环境"
                 />
               )}
             </div>
@@ -260,7 +329,7 @@ export function HostForm({
                 </div>
               </label>
             </div>
-            {form.auth === 'key' &&
+            {(form.auth === 'key' || !!errors.keyPath) &&
               field(
                 'keyPath',
                 '私钥文件路径',
@@ -301,12 +370,30 @@ export function HostForm({
           <section className="form-section">
             <h2>整理与备注</h2>
             {field(
+              'group',
+              '分组',
+              <input
+                {...fieldProps('group')}
+                value={form.group}
+                maxLength={60}
+                onChange={(e) => update('group', e.target.value)}
+                placeholder="例如：生产环境"
+              />
+            )}
+            {field(
               'tags',
               '标签（逗号分隔）',
               <input
                 {...fieldProps('tags')}
                 value={tagsText}
-                onChange={(e) => setTagsText(e.target.value)}
+                onChange={(e) => {
+                  setTagsText(e.target.value)
+                  setErrors((v) => {
+                    const next = { ...v }
+                    delete next.tags
+                    return next
+                  })
+                }}
                 placeholder="debian, edge"
               />
             )}
@@ -323,6 +410,33 @@ export function HostForm({
               />
             )}
           </section>
+          <details
+            className="form-section form-advanced"
+            open={advancedOpen}
+            onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+          >
+            <summary>
+              <span>
+                高级记录
+                {form.sshdPort ? <small>已记录远端监听端口 {form.sshdPort}</small> : <small>可选</small>}
+              </span>
+            </summary>
+            <p className="section-help">仅供档案记录，不参与本次实际连接，也不会修改远端配置。</p>
+            {field(
+              'sshdPort',
+              '远端 sshd 监听端口（可选）',
+              <input
+                {...fieldProps('sshdPort')}
+                type="number"
+                min={1}
+                max={65535}
+                value={form.sshdPort ?? ''}
+                onChange={(e) => update('sshdPort', e.target.value ? Number(e.target.value) : null)}
+                placeholder="未知时留空"
+              />,
+              '仅供记录；实际连接仍使用上方公网连接端口。'
+            )}
+          </details>
           {host && (
             <p className="muted small">档案修改仅用于后续新操作；现有会话与任务保留原连接快照。</p>
           )}

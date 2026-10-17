@@ -20,13 +20,26 @@ const terminal = pty.spawn('powershell.exe', ['-NoLogo', '-NoProfile'], {
 let output = '',
   started = false,
   longPaste = false
+const observed = {
+  pty: false,
+  unicode: false,
+  dimensions: false,
+  paste: false,
+  done: false
+}
 const timeout = setTimeout(() => {
   terminal.kill()
   process.parentPort.postMessage({ type: 'failure', error: 'ConPTY timed out', output })
   process.exit(1)
 }, 20000)
 terminal.onData((data) => {
-  output = (output + data).slice(-262144)
+  const combined = output + data
+  observed.pty ||= /SUPILOT_PTY_OK/.test(combined)
+  observed.unicode ||= /中文输入验证/.test(combined)
+  observed.dimensions ||= /\r?\n111\r?\n/.test(combined)
+  observed.paste ||= /PASTE_LENGTH=11000/.test(combined)
+  observed.done ||= /NATIVE_DONE/.test(combined)
+  output = combined.slice(-262144)
   if (!started && /PS /.test(output)) {
     started = true
     terminal.resize(111, 33)
@@ -50,14 +63,15 @@ terminal.onExit((event) => {
     versions: process.versions,
     sqlite,
     output,
+    observed,
     exitCode: event.exitCode,
     passed:
       event.exitCode === 0 &&
-      /SUPILOT_PTY_OK/.test(output) &&
-      /中文输入验证/.test(output) &&
-      /\r?\n111\r?\n/.test(output) &&
-      /PASTE_LENGTH=11000/.test(output) &&
-      /NATIVE_DONE/.test(output)
+      observed.pty &&
+      observed.unicode &&
+      observed.dimensions &&
+      observed.paste &&
+      observed.done
   })
   process.exit(0)
 })

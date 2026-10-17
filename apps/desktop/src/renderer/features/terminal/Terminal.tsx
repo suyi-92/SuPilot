@@ -213,7 +213,7 @@ export function TerminalPane({
           title={`${session.target.name} · ${session.target.username}@${session.target.address}:${session.target.port}`}
         >
           <TerminalSquare size={14} />
-          <span className="truncate">{session.target.name}</span>
+          <span className="pane-name truncate">{session.target.name}</span>
           <span className="pane-user">{endpoint(session.target)}</span>
         </button>
         <div className="pane-actions">

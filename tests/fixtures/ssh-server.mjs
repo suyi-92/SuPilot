@@ -75,6 +75,12 @@ export async function createSSHFixture() {
                 stream.write('bounded-output-row\r\n'.repeat(12000) + 'OUTPUT_END\r\n')
                 buffer = ''
               }
+              if (buffer.includes('ansi-sample')) {
+                stream.write(
+                  '\r\n\x1b[31mANSI_RED\x1b[0m \x1b[32mANSI_GREEN\x1b[0m \x1b[34mANSI_BLUE\x1b[0m\r\nfixture$ '
+                )
+                buffer = ''
+              }
               if (buffer.includes('exit-fixture')) {
                 stream.exit(0)
                 stream.end()

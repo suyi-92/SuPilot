@@ -89,6 +89,20 @@ Electron 首次安装需下载官方二进制；网络受限时配置当前命�
 - UI 剪贴板长粘贴与任务日志复制。
 - 四条独立诊断 SSH 连接，交互终端输入未被注入；正常退出与释放。
 
+UI 2.1 局部收尾的桌面回归输出位于 `.local/Test/ui-round2.1/`：850×600 最小窗口配合 12/13/17px UI 字号，额外检查主机摘要“新建”按钮的 SVG/文字子节点边界、拖窄主机栏后的恢复、终端名称/端点/操作几何关系，并通过本机回环 SSH 向真实 xterm 写入受控 16 色 ANSI 样本。Dark+、Graphite、Classic 各保存一张实际渲染截图；UI 设置恢复为测试配置的 Dark+，不修改正式用户偏好。
+
+第三轮记录保留在 `.local/Test/ui-round3/`。原报告中的窗口矩阵实际位于终端工作台，不能作为四页面矩阵验收；3.1 使用 `tests/e2e/page-matrix.mjs` 补充欢迎、主机表单、诊断、任务四页面各 12 组尺寸/字号测量，仍保留原终端矩阵。新增测试与报告约定见 [桌面测试说明](../tests/e2e/README.md)。
+
+## UI 3.1 局部收尾（2026-10-17）
+
+只修改 Renderer 的表单错误上下文、欢迎页首次快照结果与摘要色彩语义。真实 HostInput 未改；Agent 切换不丢失路径值，对仍有效的路径错误保留修正入口。首次读取失败不再判断无主机或缺少 OpenSSH，订阅的新快照不被较早请求覆盖。部分不可用摘要使用 warning，但真实任务 state 和 Status 保持原值。受限高度的表单为固定保存区预留滚动空间，避免高级字段帮助文字被挡住。
+
+验证输出位于 `.local/Test/ui-round3.1/`，交付包位于 `.local/Test/ui-round3.1-delivery/`。`node tests/e2e/ui-round31.mjs` 挂载真实 App/CSS 和隔离合成 API，覆盖罕见状态、保存/复制失败与 48 行页面矩阵；合成测试不经过 Engine 或 IPC。`pnpm test:desktop` 与新构建后的 `node tests/e2e/desktop.mjs --packaged` 另外执行四页面矩阵和全部原有真实回环、目标、焦点、ANSI、IPC 回归。没有用合成结果替代 Windows 应用验证。
+
+`pnpm test` 现在有 11 项，包括真实 HostInput 的端口、字符串、标签、用户名及路径限制，首次快照展示状态和全部任务结果语义。测试脚本使用现有依赖；未增加框架。源码包由当前工作文件逐项读取，包含既有未提交修改和新增测试，不从 HEAD 导出。
+
+证据保留任务起始源文件副本/哈希、以这些字节运行的失败回放、当前代码的通过报告及原始 PNG/日志/测量。回放有独立时间戳，不能当作修改前的历史运行时间。早期脚本测量和宿主初始化问题、实际表单遮挡失败及修正均保留说明；最终报告与探索记录分开。ConPTY 测试曾因长粘贴回显将最早检查标记挤出 262144 字符尾部而失败；现按流累计同样五个标记，保持退出码和 20 秒超时断言，原始失败报告保留。
+
 ## 证据与局限
 
 .local/Test/ 中有 integration.log、build.log、package-win.log、dev-validation.json、desktop-validation.json、packaged-validation.json、native-result.json 及截图。测试故意触发非法 IPC，日志中的对应拒绝是预期；测试结果以断言/报告为准。构建可能提示 Zod 注释移除，未影响产物。

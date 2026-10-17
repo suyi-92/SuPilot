@@ -29,6 +29,94 @@ export const time = (value?: string) =>
       })
     : '尚未完成'
 
+export type TaskResultSummary = {
+  headline: string
+  detail: string
+  nextStep: string
+  tone: 'progress' | 'success' | 'warning' | 'danger' | 'neutral'
+  counts: { succeeded: number; unavailable: number; failed: number; unfinished: number }
+}
+
+export function taskResultSummary(task: Task): TaskResultSummary {
+  const counts = {
+    succeeded: task.steps.filter((step) => step.state === 'succeeded').length,
+    unavailable: task.steps.filter((step) => step.state === 'unavailable').length,
+    failed: task.steps.filter((step) => step.state === 'failed').length,
+    unfinished: task.steps.filter((step) => ['pending', 'running', 'unknown'].includes(step.state)).length
+  }
+  const reason = task.message || ''
+  if (task.state === 'running') {
+    return {
+      headline: '正在执行，结果尚未齐全',
+      detail: reason || '正在通过独立 SSH 通道执行只读检查。',
+      nextStep: '等待任务结束后查看每个步骤的原始输出。',
+      tone: 'progress',
+      counts
+    }
+  }
+  if (task.state === 'cancel-requested') {
+    return {
+      headline: '已请求取消，等待确认结束',
+      detail: reason || 'Engine 尚未确认任务已取消，远端结果仍不能推断。',
+      nextStep: '等待状态更新；在确认前不要把任务当作已取消。',
+      tone: 'warning',
+      counts
+    }
+  }
+  if (task.state === 'cancelled') {
+    return {
+      headline: '任务已取消',
+      detail: reason || 'Engine 已确认本次任务取消。',
+      nextStep: '如需继续，请检查目标和认证准备后从诊断页重新开始。',
+      tone: 'neutral',
+      counts
+    }
+  }
+  if (task.state === 'interrupted') {
+    return {
+      headline: '执行中断，结果未完全确认',
+      detail: reason || '连接或执行通道中断，未收到完整的远端结果。',
+      nextStep: '先核对目标与连接状态，再查看中断步骤的退出码和日志。',
+      tone: 'danger',
+      counts
+    }
+  }
+  if (task.state === 'unknown') {
+    return {
+      headline: '结果未知',
+      detail: reason || '任务结束状态未能确认，不能推断远端是否完成。',
+      nextStep: '核对目标和连接记录；不要用重试代替结果确认。',
+      tone: 'warning',
+      counts
+    }
+  }
+  if (task.state === 'failed') {
+    return {
+      headline: '任务未成功',
+      detail: reason || '至少一个步骤失败，请查看失败步骤和原始输出。',
+      nextStep: '根据已有错误信息检查认证准备、目标和退出码。',
+      tone: 'danger',
+      counts
+    }
+  }
+  if (counts.unavailable > 0) {
+    return {
+      headline: '检查完成，部分项不可用',
+      detail: reason || `${counts.succeeded} 项完成，${counts.unavailable} 项未能执行。`,
+      nextStep: '查看不可用步骤的说明；完成不代表服务器健康或所有资源正常。',
+      tone: 'warning',
+      counts
+    }
+  }
+  return {
+    headline: '只读检查已完成',
+    detail: reason || '本次检查按现有契约完成。',
+    nextStep: '完成只表示本次查询返回，不等于服务器健康或所有资源正常。',
+    tone: 'success',
+    counts
+  }
+}
+
 function Duration({ task }: { task: Task }) {
   const [now, setNow] = useState(Date.now())
   const running = activeTask(task)
@@ -64,7 +152,7 @@ export function TaskDetail({ task, onCancel }: { task: Task; onCancel: () => voi
   )
   const step = task.steps.find((s) => s.id === stepId) || task.steps[0]
   const log = `${task.title} · ${task.target.name}\n${task.message || ''}\n${task.steps.map((s) => `[${s.title}] ${s.state}\n${s.output || '无输出'}`).join('\n\n')}`
-  const completed = task.steps.filter((s) => s.state === 'succeeded').length
+  const summary = taskResultSummary(task)
   useEffect(() => {
     if (!copied) return
     const timer = setTimeout(() => setCopied(false), 3000)
@@ -106,13 +194,20 @@ export function TaskDetail({ task, onCancel }: { task: Task; onCancel: () => voi
             单机 · 只读
           </strong>
           <small>
-            {completed} / {task.steps.length} 项完成
+            成功 {summary.counts.succeeded} / 共 {task.steps.length}
+            {summary.counts.unavailable ? ` · 不可用 ${summary.counts.unavailable}` : ''}
+            {summary.counts.failed ? ` · 失败 ${summary.counts.failed}` : ''}
+            {summary.counts.unfinished ? ` · 未完成 ${summary.counts.unfinished}` : ''}
           </small>
         </div>
       </div>
-      <div className={`result-message result-${task.state}`}>
-        {task.state === 'succeeded' ? <CheckCheck size={16} /> : <AlertCircle size={16} />}
-        <span>{task.message || '正在通过独立 SSH 通道执行，请稍候。'}</span>
+      <div className={`result-message result-${task.state} result-tone-${summary.tone}`}>
+        {summary.tone === 'success' ? <CheckCheck size={16} /> : <AlertCircle size={16} />}
+        <div>
+          <strong>{summary.headline}</strong>
+          <p>{summary.detail}</p>
+          <small>{summary.nextStep}</small>
+        </div>
       </div>
       <div className="results-heading">
         <h2>检查结果</h2>
@@ -159,7 +254,7 @@ export function TaskDetail({ task, onCancel }: { task: Task; onCancel: () => voi
       <div className="task-actions">
         <span className="muted small">目标与连接参数已在任务创建时固定。</span>
         {copyError && (
-          <span className="error" role="alert">
+          <span className="error" role="alert" aria-live="polite">
             复制失败，请重试。
           </span>
         )}

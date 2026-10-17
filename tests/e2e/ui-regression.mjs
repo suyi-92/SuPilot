@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { measureSelectionActions, assertSelectionActions, checkMinimumSidebar } from './selection-actions.mjs'
 
 const settle = (page) => page.waitForTimeout(200) // Beyond the 120ms color transition.
 const shot = (page, output, name) => page.screenshot({ path: join(output, `${name}.png`) })
@@ -58,7 +59,7 @@ async function resize(app, page, width, height = 940) {
 // Sample the rendered background beside the text: this includes the welcome
 // radial gradient's transparency and ancestors, instead of assuming the root color.
 async function welcomeContrast(page, app, link) {
-  const text = link.locator('small')
+  const text = link.locator('small, p').first()
   const box = await text.boundingBox()
   const png = await page.screenshot({ clip: {
     x: Math.floor(box.x - 2), y: Math.floor(box.y + box.height / 2), width: 1, height: 1
@@ -85,9 +86,9 @@ export async function checkWelcome({ page, app, output, report, root }) {
   assert.deepEqual(unresolved, [], 'All authored theme references resolve in the app')
   report.ui.tokenReferences = references
   report.ui.welcome = []
-  const selectors = ['.welcome-link small', '.welcome-note', '.welcome-note code',
-    '.welcome-step small', '.welcome-footer-note']
-  for (const size of [13, 17]) {
+  const selectors = ['.welcome-subtitle', '.welcome-entry p', '.welcome-step small',
+    '.welcome-footer-note']
+  for (const size of [12, 13, 17]) {
     await setUiSize(page, size)
     const fonts = {}
     for (const selector of selectors) {
@@ -96,24 +97,42 @@ export async function checkWelcome({ page, app, output, report, root }) {
       fonts[selector] = value.fontSize
     }
     const colors = []
-    for (const link of await page.locator('.welcome-link').all()) {
+    for (const link of await page.locator('.welcome-actions .button').all()) {
       await page.mouse.move(1, 1)
       await link.scrollIntoViewIfNeeded()
       await settle(page)
-      const normal = await welcomeContrast(page, app, link)
+      const normal = await styles(link)
       await link.hover()
       await settle(page)
-      const hover = await welcomeContrast(page, app, link)
+      const hover = await styles(link)
+      normal.contrast = contrast(normal.color, normal.background)
+      hover.contrast = contrast(hover.color, hover.background)
+      assert.ok(normal.contrast >= 4.5)
+      assert.ok(hover.contrast >= 4.5)
       colors.push({ normal, hover })
     }
     await shot(page, output, `welcome-hover-${size}`)
     report.ui.welcome.push({ size, fonts, colors })
   }
+  const hostCount = await page.locator('.host-row').count()
+  if (hostCount > 0) {
+    assert.equal(await page.locator('.welcome').getByRole('button', { name: '快速打开主机', exact: true }).count(), 1)
+    assert.equal(await page.locator('.welcome').getByRole('button', { name: '添加主机', exact: true }).count(), 1)
+    assert.equal(await page.locator('.welcome-entry-existing').count(), 1)
+  } else {
+    assert.equal(await page.locator('.welcome-entry-first').count(), 1)
+    assert.equal(await page.locator('.welcome').getByRole('button', { name: '探索演示工作区', exact: true }).count(), 1)
+  }
+  assert.equal(await page.locator('.welcome-section-index').count(), 0, 'Welcome page has no decorative section numbering')
   await setUiSize(page, 13)
-  report.checks.push('UI tokens resolve; welcome helper text scales 13→17px and composed normal/hover contrast is ≥4.5:1')
+  report.checks.push('UI tokens resolve; welcome helper text scales across 12/13/17px and composed normal/hover contrast is ≥4.5:1')
 }
 
 export async function checkPrimary({ page, output, report }) {
+  const sections = (await page.locator('.form-section h2').allTextContents()).map((text) => text.trim())
+  assert.deepEqual(sections.slice(0, 3), ['连接信息', '认证方式', '整理与备注'])
+  assert.equal(await page.locator('.form-advanced').count(), 1)
+  assert.match(await page.locator('.form-advanced summary').innerText(), /高级记录/)
   const button = page.getByRole('button', { name: '保存主机', exact: true })
   await button.scrollIntoViewIfNeeded()
   await page.mouse.move(1, 1)
@@ -144,7 +163,7 @@ export async function checkPrimary({ page, output, report }) {
   }
   report.ui.primary = { normal, hover, pressed, keyboardFocus }
   await shot(page, output, 'primary-keyboard-focus')
-  report.checks.push('Primary button normal/hover/pressed/keyboard-focus text contrast ≥4.5:1; no geometry change')
+  report.checks.push('Host form groups connection/auth/profile fields, keeps advanced sshd record separate, and preserves primary button contrast/geometry checks')
 }
 
 export async function checkWorkbench({ page, app, output, report }) {
@@ -182,13 +201,13 @@ export async function checkWorkbench({ page, app, output, report }) {
   await page.getByLabel('终端 ANSI 配色').selectOption(prefsBefore.ansi)
   await page.getByRole('button', { name: '完成', exact: true }).click()
   await settle(page)
-  for (const size of [13, 17]) {
+  for (const size of [12, 13, 17]) {
     await resize(app, page, 1440)
     await setUiSize(page, size)
     await terminalTab(page).click()
     const fonts = {}
     for (const selector of ['.host-copy strong', '.host-state', '.detail-fields dd',
-      '.detail-state', '.detail-section small', '.detail-footnote']) {
+      '.detail-state', '.detail-section small', '.detail-footnote', '.pane-name', '.pane-user']) {
       const value = await styles(page.locator(selector).filter({ visible: true }).first())
       const minimum = selector === '.host-copy strong' ? size : 12 * size / 13
       assert.ok(value.fontSize >= minimum - 0.01, selector)
@@ -225,6 +244,9 @@ export async function checkWorkbench({ page, app, output, report }) {
     ]
     for (const [width, height] of windows) {
       await resize(app, page, width, height)
+      if (width === minSize[0] && height === minSize[1]) {
+        await checkMinimumSidebar({ page, app, output, report }, size)
+      }
       const layout = await page.evaluate(() => {
         const header = document.querySelector('.app-header')
         const command = document.querySelector('.command-center')
@@ -236,6 +258,10 @@ export async function checkWorkbench({ page, app, output, report }) {
         const actions = selection?.querySelector('.selection-actions')
         const tabBar = document.querySelector('.tab-bar')
         const tabActions = document.querySelector('.tab-actions')
+        const paneIdentity = paneHeader?.querySelector('.pane-identity')
+        const paneName = paneHeader?.querySelector('.pane-name')
+        const paneUser = paneHeader?.querySelector('.pane-user')
+        const paneActions = paneHeader?.querySelector('.pane-actions')
         const children = [...header.children].filter((el) => getComputedStyle(el).display !== 'none')
           .map((el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right } })
         const bounds = (el) => el ? (() => { const r = el.getBoundingClientRect(); return {
@@ -247,7 +273,10 @@ export async function checkWorkbench({ page, app, output, report }) {
           right: children.at(-1).right,
           contextVisible: getComputedStyle(document.querySelector('.command-context')).display !== 'none',
           activePane: bounds(activePane), paneHeader: bounds(paneHeader), selectedHost: bounds(selectedHost),
-          selection: bounds(selection), actions: bounds(actions), tabBar: bounds(tabBar), tabActions: bounds(tabActions),
+          selection: bounds(selection), actions: bounds(actions),
+          sidebarWidth: bounds(document.querySelector('.host-sidebar'))?.width || 0,
+          paneIdentity: bounds(paneIdentity), paneName: bounds(paneName), paneUser: bounds(paneUser),
+          paneActions: bounds(paneActions), tabBar: bounds(tabBar), tabActions: bounds(tabActions),
           terminalToolbarCount: document.querySelectorAll('.terminal-tab-bar .toolbar-actions').length,
           workspaceToolbarCount: document.querySelectorAll('.workspace-toolbar').length }
       })
@@ -259,7 +288,13 @@ export async function checkWorkbench({ page, app, output, report }) {
       if (layout.viewport > 900) assert.ok(layout.command > 260)
       assert.ok(layout.selectedHost?.width > 80 && layout.selectedHost?.height > 0)
       assert.ok(layout.actions?.bottom <= layout.selection?.bottom + 1, JSON.stringify(layout))
+      layout.selectionActions = await measureSelectionActions(page)
+      assertSelectionActions(layout.selectionActions)
       assert.ok(layout.paneHeader?.height >= 30 && layout.paneHeader?.bottom <= layout.activePane?.bottom + 1)
+      assert.ok(layout.paneName?.top >= layout.paneIdentity?.top - 1 && layout.paneName?.bottom <= layout.paneHeader?.bottom + 1)
+      assert.ok(layout.paneUser?.top >= layout.paneName?.bottom - 1 && layout.paneUser?.bottom <= layout.paneHeader?.bottom + 1)
+      assert.ok(layout.paneActions?.left >= layout.paneIdentity?.right - 1, JSON.stringify(layout))
+      if (size === 17 && width === minSize[0] && height === minSize[1]) assert.ok(layout.paneHeader.height <= 72, JSON.stringify(layout))
       assert.equal(layout.terminalToolbarCount, 1)
       assert.equal(layout.workspaceToolbarCount, 0)
       assert.ok(layout.tabActions?.left >= layout.tabBar?.left)
@@ -305,7 +340,7 @@ export async function checkWorkbench({ page, app, output, report }) {
   await terminalTab(page).click()
   await row(page, '东京 · 边缘节点 01').click()
   await setUiSize(page, 13)
-  report.checks.push('Default/17px host, details, search, quick-open and monospace log fonts; independent xterm preferences; min/900/1280/1440 window layout')
+  report.checks.push('12/13/17px host, details, search, quick-open, pane identity and monospace log fonts; independent xterm preferences; min/900/1280/1440 window layout')
   report.checks.push('Selection B/session A: both diagnostic entry targets match labels; opened operations and created task snapshots stay fixed after selection changes')
 }
 
